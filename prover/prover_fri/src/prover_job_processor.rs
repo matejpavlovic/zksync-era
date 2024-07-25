@@ -73,7 +73,7 @@ impl Prover {
         }
     }
 
-    fn get_setup_data(
+    pub fn get_setup_data(
         &self,
         key: ProverServiceDataKey,
     ) -> anyhow::Result<Arc<GoldilocksProverSetupData>> {
@@ -146,6 +146,7 @@ impl Prover {
             &proof,
             &artifact.vk,
             job_id,
+            0
         );
         FriProofWrapper::Recursive(ZkSyncRecursionLayerProof::from_inner(circuit_id, proof))
     }
@@ -178,7 +179,7 @@ impl Prover {
         };
         METRICS.proof_generation_time[&label].observe(started_at.elapsed());
 
-        verify_proof(&CircuitWrapper::Base(circuit), &proof, &artifact.vk, job_id);
+        verify_proof(&CircuitWrapper::Base(circuit), &proof, &artifact.vk, job_id, 0);
         FriProofWrapper::Base(ZkSyncBaseLayerProof::from_inner(circuit_id, proof))
     }
 }

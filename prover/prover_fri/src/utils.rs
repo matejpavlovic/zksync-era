@@ -37,6 +37,7 @@ pub type Ext = GoldilocksExt2;
 #[cfg(feature = "gpu")]
 pub type SharedWitnessVectorQueue = Arc<Mutex<FixedSizeQueue<GpuProverJob>>>;
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProverArtifacts {
     block_number: L1BatchNumber,
     pub proof_wrapper: FriProofWrapper,
@@ -117,6 +118,7 @@ pub fn verify_proof(
     proof: &Proof<F, H, Ext>,
     vk: &VerificationKey<F, H>,
     job_id: u32,
+    request_id: u32
 ) {
     let started_at = Instant::now();
     let (is_valid, circuit_id) = match circuit_wrapper {
@@ -136,6 +138,10 @@ pub fn verify_proof(
         let msg = format!("Failed to verify proof for job-id: {job_id} circuit_type {circuit_id}");
         tracing::error!("{}", msg);
         panic!("{}", msg);
+    }
+
+    else {
+        println!("Proof verification for job {} with request id {} succeeded.", job_id, request_id);
     }
 }
 
