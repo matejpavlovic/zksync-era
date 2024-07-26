@@ -1,53 +1,98 @@
-# ZKsync Era: A ZK Rollup For Scaling Ethereum
+# Community Proving with Zksync-Era
 
-[![Logo](eraLogo.png)](https://zksync.io/)
+# 1. Install all required components and configurations
 
-ZKsync Era is a layer 2 rollup that uses zero-knowledge proofs to scale Ethereum without compromising on security or
-decentralization. Since it's EVM compatible (Solidity/Vyper), 99% of Ethereum projects can redeploy without refactoring
-or re-auditing a single line of code. ZKsync Era also uses an LLVM-based compiler that will eventually let developers
-write smart contracts in C++, Rust and other popular languages.
+# Clone repository
+git clone https://github.com/johnstephan/zksync-era.git
 
-## Knowledge Index
+# Checkout branch
+cd zksync-era && git checkout community-proving && cd ..
 
-The following questions will be answered by the following resources:
+# Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+. "$HOME/.cargo/env"
 
-| Question                                                | Resource                                       |
-| ------------------------------------------------------- | ---------------------------------------------- |
-| What do I need to develop the project locally?          | [development.md](docs/guides/development.md)   |
-| How can I set up my dev environment?                    | [setup-dev.md](docs/guides/setup-dev.md)       |
-| How can I run the project?                              | [launch.md](docs/guides/launch.md)             |
-| What is the logical project structure and architecture? | [architecture.md](docs/guides/architecture.md) |
-| Where can I find protocol specs?                        | [specs.md](docs/specs/README.md)               |
-| Where can I find developer docs?                        | [docs](https://docs.zksync.io)                 |
+# NVM
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
 
-## Policies
+# Reload current shell
+. .bashrc
 
-- [Security policy](SECURITY.md)
-- [Contribution policy](CONTRIBUTING.md)
+# All necessary stuff
+sudo apt update -yqq
+sudo apt-get install -yqq build-essential pkg-config clang lldb lld libssl-dev postgresql
 
-## License
+# Install cmake 3.24.2
+sudo apt-get install -yqq build-essential libssl-dev checkinstall zlib1g-dev libssl-dev && \
+wget https://github.com/Kitware/CMake/releases/download/v3.24.2/cmake-3.24.2.tar.gz && \
+tar -xzvf cmake-3.24.2.tar.gz && \
+cd cmake-3.24.2/ && \
+./bootstrap && \
+make && \
+sudo make install && \
+cd ../ && \
+echo 'export PATH="/usr/local/bin:$PATH"' >> .bashrc && \
+. .bashrc
 
-ZKsync Era is distributed under the terms of either
+# Docker
+sudo apt install -yqq apt-transport-https ca-certificates curl software-properties-common && \
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - && \
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable" && \
+apt-cache policy docker-ce && \
+sudo apt install -yqq docker-ce && \
+sudo usermod -aG docker $USER
 
-- Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or <https://opensource.org/blog/license/mit/>)
+# You might need to re-connect (due to usermod change).
+source .bashrc
+newgrp docker
 
-at your option.
+# SQL tools
+cargo install sqlx-cli --version 0.7.3
+# Start docker.
+sudo systemctl start docker
 
-## Official Links
+# Solidity
+sudo add-apt-repository ppa:ethereum/ethereum && \
+sudo apt-get update -yqq && \
+sudo apt-get install -yqq solc
 
-- [Website](https://zksync.io/)
-- [GitHub](https://github.com/matter-labs)
-- [ZK Credo](https://github.com/zksync/credo)
-- [Twitter](https://twitter.com/zksync)
-- [Twitter for Developers](https://twitter.com/zkSyncDevs)
-- [Discord](https://join.zksync.dev/)
-- [Mirror](https://zksync.mirror.xyz/)
-- [Youtube](https://www.youtube.com/@zkSync-era)
+# Node & yarn
+nvm install 18
+npm install -g yarn
+yarn set version 1.22.19
 
-## Disclaimer
+# Set zksync variables
+echo 'export ZKSYNC_HOME="$HOME/zksync-era"' >> .bashrc && \
+echo 'export PATH="$ZKSYNC_HOME/bin:$PATH"' >> .bashrc
 
-ZKsync Era has been through lots of testing and audits. Although it is live, it is still in alpha state and will go
-through more audits and bug bounty programs. We would love to hear our community's thoughts and suggestions about it! It
-is important to state that forking it now can potentially lead to missing important security updates, critical features,
-and performance improvements.
+# At this point, we need to reboot
+sudo reboot
+
+# Stop the postgres database we are going to use the Docker one
+sudo systemctl stop postgresql
+
+
+# 2. Run the prover
+
+# Init Era
+cd zksync-era
+zk init
+
+# Troubleshooting
+If you get the following error:
+Error: EACCES: permission denied, mkdir'/home/$USER/zksync-era/volumes/reth/data'
+Then run the following command and retry:
+sudo chown -R $USER:$USER volumes
+
+If you get the following error:
+Error response from daemon: driver failed programming external connectivity on endpoint zksync-era-postgres-1
+Remember to shut down the postgres server and retry:
+sudo systemctl stop postgresql
+
+# Set up and compile all prover components
+# This will take close to an hour
+cd prover
+./setup.sh
+
+# Now, everything is ready to run the prover/client
+zk f cargo run --release --bin client
