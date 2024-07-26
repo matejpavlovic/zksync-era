@@ -11,6 +11,7 @@ use zksync_types::basic_fri_types::CircuitIdRoundTuple;
 use zksync_core_leftovers::temp_config_store::load_general_config;
 use zksync_prover_fri::cpu_prover_utils::*;
 use tokio::signal;
+use std::time::Instant;
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
