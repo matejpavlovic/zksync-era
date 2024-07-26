@@ -10,6 +10,7 @@ use zksync_prover_fri_types::PROVER_PROTOCOL_SEMANTIC_VERSION;
 use zksync_types::basic_fri_types::CircuitIdRoundTuple;
 use zksync_core_leftovers::temp_config_store::load_general_config;
 use zksync_prover_fri::cpu_prover_utils::*;
+use tokio::signal;
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
@@ -18,6 +19,8 @@ pub(crate) struct Cli {
     pub(crate) config_path: Option<std::path::PathBuf>,
     #[arg(long)]
     pub(crate) secrets_path: Option<std::path::PathBuf>,
+    #[arg(long)]
+    pub(crate) server_url: String, // New argument for server URL
 }
 
 struct Client {
@@ -48,41 +51,45 @@ impl Client {
     }
 
     pub async fn poll_for_job(&self) -> anyhow::Result<()> {
-        let response: Result<Job, _> = self.client.request("get_job", None).await;
+        loop {
+            let response: Result<Job, _> = self.client.request("get_job", None).await;
 
-        match response {
-            Ok(job) => {
-                let proof_job = job.proof_job;
-                let result = format!(
-                    "Have to execute job {}, with block number {}, and request id {}.",
-                    proof_job.job_id, proof_job.block_number, job.request_id
-                );
-                println!("{}", result);
+            match response {
+                Ok(job) => {
+                    let proof_job = job.proof_job;
+                    let result = format!(
+                        "Have to execute job {}, with block number {}, and request id {}.",
+                        proof_job.job_id, proof_job.block_number, job.request_id
+                    );
+                    println!("{}", result);
 
-                let config = Arc::clone(&self.client_prover.config);
-                let setup_data = get_setup_data(self.setup_load_mode.clone(), proof_job.setup_data_key.clone());
-                let proof_artifact = self.client_prover.prove(proof_job, config, setup_data.context("get_setup_data()").unwrap());
-                let job_result = JobResult::new(job.request_id, proof_artifact);
+                    let config = Arc::clone(&self.client_prover.config);
+                    let setup_data = get_setup_data(self.setup_load_mode.clone(), proof_job.setup_data_key.clone()).context("get_setup_data()").unwrap();
+                    let proof_artifact = self.client_prover.prove(proof_job, config, setup_data, job.request_id);
+                    //let proof_artifact = self.prove_with_retry(proof_job, config, setup_data).await?;
+                    let job_result = JobResult::new(job.request_id, proof_artifact);
 
-                let result_json = serde_json::to_value(job_result)?;
-                let params = ParamsSer::Array(vec![result_json]);
-                let submit_response: Result<(), _> = self.client.request("submit_result", Some(params)).await;
+                    let result_json = serde_json::to_value(job_result)?;
+                    let params = ParamsSer::Array(vec![result_json]);
+                    let submit_response: Result<(), _> = self.client.request("submit_result", Some(params)).await;
 
-                match submit_response {
-                    Ok(_) => println!("Proof submitted and verified successfully."),
-                    Err(e) => eprintln!("Failed to submit proof: {}.", e),
+                    match submit_response {
+                        Ok(_) => println!("Proof submitted and verified successfully."),
+                        Err(e) => eprintln!("Failed to submit proof: {}.", e),
+                    }
                 }
-            }
-            Err(e) => eprintln!("Error: {}.", e),
-        }
 
-        Ok(())
+            Err(e) => eprintln!("Error: {}.", e),
+            }
+            //Ok(())
+        }
     }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let server_url = "http://127.0.0.1:3030";
+    let opt = Cli::parse();
+    let server_url = &opt.server_url;
     let max_size: u32 = 20 * 1024 * 1024;
     let client = Client::new(server_url, max_size).await?;
     client.poll_for_job().await

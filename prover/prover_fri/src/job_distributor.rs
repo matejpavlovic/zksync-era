@@ -79,8 +79,8 @@ impl Server {
             let mut jobs = jobs_clone.write().unwrap();
             if let Some(job) = jobs.remove(&job_result.request_id) {
                 println!("Received proof artifact for job {} with request id {}.", job.job_id, job_result.request_id);
-                let setup_data = get_setup_data(setup_load_mode_clone.clone(), job.setup_data_key.clone())
-                    .context("get_setup_data()").unwrap();
+                println!("Verifying proof");
+                let setup_data = get_setup_data(setup_load_mode_clone.clone(), job.setup_data_key.clone()).context("get_setup_data()").unwrap();
                 verify_proof_artifact(job_result, job, &setup_data.vk);
                 Ok(())
             } else {
@@ -118,7 +118,8 @@ impl Server {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let server_addr: SocketAddr = "127.0.0.1:3030".parse()?;
+    let server_addr: SocketAddr = "0.0.0.0:3030".parse()?;
+    //let server_addr: SocketAddr = "127.0.0.1:3030".parse()?;
     let max_size = 20 * 1024 * 1024;
     let server = Server::new(server_addr, max_size).await?;
     server.run().await

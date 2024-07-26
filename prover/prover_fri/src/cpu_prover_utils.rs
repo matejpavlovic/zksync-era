@@ -75,15 +75,16 @@ impl Prover {
                  job: ProverJob,
                  config: Arc<FriProverConfig>,
                  setup_data: Arc<GoldilocksProverSetupData>,
+                 request_id: u32,
     ) -> ProverArtifacts {
         println!("PROVING.");
 
         let proof_wrapper = match job.circuit_wrapper {
             CircuitWrapper::Base(base_circuit) => {
-                Self::prove_base_layer(job.job_id, base_circuit, config, setup_data)
+                Self::prove_base_layer(job.job_id, base_circuit, config, setup_data, request_id)
             }
             CircuitWrapper::Recursive(recursive_circuit) => {
-                Self::prove_recursive_layer(job.job_id, recursive_circuit, config, setup_data)
+                Self::prove_recursive_layer(job.job_id, recursive_circuit, config, setup_data, request_id)
             }
         };
 
@@ -96,6 +97,7 @@ impl Prover {
         circuit: ZkSyncRecursiveLayerCircuit,
         _config: Arc<FriProverConfig>,
         artifact: Arc<GoldilocksProverSetupData>,
+        request_id: u32,
     ) -> FriProofWrapper {
         let worker = Worker::new();
         let circuit_id = circuit.numeric_circuit_type();
@@ -119,7 +121,7 @@ impl Prover {
         };
         METRICS.proof_generation_time[&label].observe(started_at.elapsed());*/
 
-        verify_proof(&CircuitWrapper::Recursive(circuit), &proof, &artifact.vk, job_id, 0);
+        verify_proof(&CircuitWrapper::Recursive(circuit), &proof, &artifact.vk, job_id, request_id);
         FriProofWrapper::Recursive(ZkSyncRecursionLayerProof::from_inner(circuit_id, proof))
 
     }
@@ -129,6 +131,7 @@ impl Prover {
         circuit: ZkSyncBaseLayerCircuit,
         _config: Arc<FriProverConfig>,
         artifact: Arc<GoldilocksProverSetupData>,
+        request_id: u32,
     ) -> FriProofWrapper {
         let worker = Worker::new();
         let circuit_id = circuit.numeric_circuit_type();
@@ -152,7 +155,7 @@ impl Prover {
         };
         METRICS.proof_generation_time[&label].observe(started_at.elapsed());
 
-        verify_proof(&CircuitWrapper::Base(circuit), &proof, &artifact.vk, job_id, 0);
+        verify_proof(&CircuitWrapper::Base(circuit), &proof, &artifact.vk, job_id, request_id);
         FriProofWrapper::Base(ZkSyncBaseLayerProof::from_inner(circuit_id, proof))
     }
 
