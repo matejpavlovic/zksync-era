@@ -73,7 +73,7 @@ impl Prover {
 
     pub fn prove(&self,
                  job: ProverJob,
-                 config: Arc<FriProverConfig>,
+                 //config: Arc<FriProverConfig>,
                  setup_data: Arc<GoldilocksProverSetupData>,
                  request_id: u32,
     ) -> ProverArtifacts {
@@ -81,10 +81,10 @@ impl Prover {
 
         let proof_wrapper = match job.circuit_wrapper {
             CircuitWrapper::Base(base_circuit) => {
-                Self::prove_base_layer(job.job_id, base_circuit, config, setup_data, request_id)
+                Self::prove_base_layer(job.job_id, base_circuit, self.config.clone(), setup_data, request_id)
             }
             CircuitWrapper::Recursive(recursive_circuit) => {
-                Self::prove_recursive_layer(job.job_id, recursive_circuit, config, setup_data, request_id)
+                Self::prove_recursive_layer(job.job_id, recursive_circuit, self.config.clone(), setup_data, request_id)
             }
         };
 

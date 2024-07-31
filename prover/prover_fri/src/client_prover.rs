@@ -52,6 +52,9 @@ impl Client {
     }
 
     pub async fn poll_for_job(&self) -> anyhow::Result<()> {
+
+        //let config = Arc::clone(&self.client_prover.config);
+
         loop {
             let response: Result<Job, _> = self.client.request("get_job", None).await;
 
@@ -64,10 +67,10 @@ impl Client {
                     );
                     println!("{}", result);
 
-                    let config = Arc::clone(&self.client_prover.config);
                     let setup_data = get_setup_data(self.setup_load_mode.clone(), proof_job.setup_data_key.clone()).context("get_setup_data()").unwrap();
                     let started_at = Instant::now();
-                    let proof_artifact = self.client_prover.prove(proof_job, config, setup_data, job.request_id);
+                    //let proof_artifact = self.client_prover.prove(proof_job, self.client_prover.config.clone(), setup_data, job.request_id);
+                    let proof_artifact = self.client_prover.prove(proof_job, setup_data, job.request_id);
                     println!("Finished proving, took: {:?}", started_at.elapsed());
                     let job_result = JobResult::new(job.request_id, proof_artifact);
 
