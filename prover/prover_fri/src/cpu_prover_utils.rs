@@ -225,7 +225,8 @@ pub fn get_setup_data(
             let artifact: GoldilocksProverSetupData = keystore
                 .load_cpu_setup_data_for_circuit_type(key.clone())
                 .context("get_cpu_setup_data_for_circuit_type()")?;
-            METRICS.gpu_setup_data_load_time[&key.circuit_id.to_string()].observe(started_at.elapsed());
+            //METRICS.gpu_setup_data_load_time[&key.circuit_id.to_string()].observe(started_at.elapsed());
+            println!("Setup data load time, took: {:?}", started_at.elapsed());
 
             Arc::new(artifact)
         }

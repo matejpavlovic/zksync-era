@@ -79,7 +79,6 @@ impl Server {
             let mut jobs = jobs_clone.write().unwrap();
             if let Some(job) = jobs.remove(&job_result.request_id) {
                 println!("Received proof artifact for job {} with request id {}.", job.job_id, job_result.request_id);
-
                 let setup_data = get_setup_data(setup_load_mode_clone.clone(), job.setup_data_key.clone()).context("get_setup_data()").unwrap();
                 verify_proof_artifact(job_result, job, &setup_data.vk);
                 Ok(())
