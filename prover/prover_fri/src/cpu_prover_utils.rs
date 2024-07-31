@@ -1,19 +1,10 @@
 #![feature(generic_const_exprs)]
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use anyhow::Context as _;
-use circuit_definitions::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
-use circuit_definitions::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
-use circuit_definitions::boojum::cs::implementations::proof::Proof;
 use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
-use circuit_definitions::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
-use circuit_definitions::circuit_definitions::recursion_layer::ZkSyncRecursionLayerStorageType;
-use clap::Parser;
-use tokio::task::JoinHandle;
-use zkevm_test_harness::prover_utils::{prove_base_layer_circuit, prove_recursion_layer_circuit, verify_base_layer_proof, verify_recursion_layer_proof};
+use zkevm_test_harness::prover_utils::{prove_base_layer_circuit, prove_recursion_layer_circuit};
 use zksync_config::configs::{fri_prover_group::FriProverGroupConfig, FriProverConfig};
 use zksync_env_config::FromEnv;
-use zksync_object_store::{bincode, ObjectStore};
-use zksync_prover_dal::{ConnectionPool, ProverDal};
 use zksync_prover_fri_types::{circuit_definitions::{
     base_layer_proof_config,
     boojum::{cs::implementations::pow::NoPow, worker::Worker},
@@ -22,25 +13,13 @@ use zksync_prover_fri_types::{circuit_definitions::{
         recursion_layer::{ZkSyncRecursionLayerProof, ZkSyncRecursiveLayerCircuit},
     },
     recursion_layer_proof_config,
-}, CircuitWrapper, FriProofWrapper, PROVER_PROTOCOL_SEMANTIC_VERSION, ProverJob, ProverServiceDataKey};
-use zksync_prover_fri_utils::fetch_next_circuit;
-use zksync_queued_job_processor::{async_trait, JobProcessor};
-use zksync_types::{basic_fri_types::CircuitIdRoundTuple, L1BatchNumber, protocol_version::ProtocolSemanticVersion};
+}, CircuitWrapper, FriProofWrapper, ProverJob, ProverServiceDataKey};
+use zksync_types::{basic_fri_types::CircuitIdRoundTuple, protocol_version::ProtocolSemanticVersion};
 use zksync_vk_setup_data_server_fri::{keystore::Keystore, GoldilocksProverSetupData};
 
 use crate::{metrics::{CircuitLabels, Layer, METRICS}, utils::{setup_metadata_to_setup_data_key, get_setup_data_key, verify_proof, ProverArtifacts}};
-
-use tokio::net::TcpStream;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use serde::{Deserialize, Serialize};
-
-use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::types::params::ParamsSer;
-use tokio;
-use zksync_core_leftovers::temp_config_store::load_general_config;
-use zksync_types::basic_fri_types::AggregationRound;
 use crate::utils::{F, H};
+
 
 #[derive(Clone)]
 pub enum SetupLoadMode {
@@ -50,7 +29,7 @@ pub enum SetupLoadMode {
 
 pub struct Prover {
     pub config: Arc<FriProverConfig>,
-    setup_load_mode: SetupLoadMode,
+    pub setup_load_mode: SetupLoadMode,
     circuit_ids_for_round_to_be_proven: Vec<CircuitIdRoundTuple>,
     protocol_version: ProtocolSemanticVersion,
 }
@@ -73,9 +52,10 @@ impl Prover {
 
     pub fn prove(&self,
                  job: ProverJob,
-                 setup_data: Arc<GoldilocksProverSetupData>,
                  request_id: u32,
     ) -> ProverArtifacts {
+
+        let setup_data = get_setup_data(self.setup_load_mode.clone(), job.setup_data_key.clone()).context("get_setup_data()").unwrap();
         println!("Proving.");
         let started_at = Instant::now();
 
