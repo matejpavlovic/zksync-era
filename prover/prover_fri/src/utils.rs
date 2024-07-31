@@ -120,6 +120,7 @@ pub fn verify_proof(
     job_id: u32,
     request_id: u32
 ) {
+    println!("Verifying proof");
     let started_at = Instant::now();
     let (is_valid, circuit_id) = match circuit_wrapper {
         CircuitWrapper::Base(base_circuit) => (
@@ -132,8 +133,6 @@ pub fn verify_proof(
         ),
     };
 
-    METRICS.proof_verification_time[&circuit_id.to_string()].observe(started_at.elapsed());
-
     if !is_valid {
         let msg = format!("Failed to verify proof for job-id: {job_id} circuit_type {circuit_id}");
         tracing::error!("{}", msg);
@@ -141,7 +140,7 @@ pub fn verify_proof(
     }
 
     else {
-        println!("Proof verification for job {} with request id {} succeeded.", job_id, request_id);
+        println!("Proof verification for job {} with request id {} succeeded, it took {:?}.", job_id, request_id, started_at.elapsed());
     }
 }
 

@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-use std::sync::Arc;
 use anyhow::Context as _;
 use clap::Parser;
 use jsonrpsee::http_client::HttpClientBuilder;
@@ -10,7 +9,6 @@ use zksync_prover_fri_types::PROVER_PROTOCOL_SEMANTIC_VERSION;
 use zksync_types::basic_fri_types::CircuitIdRoundTuple;
 use zksync_core_leftovers::temp_config_store::load_general_config;
 use zksync_prover_fri::cpu_prover_utils::*;
-use tokio::signal;
 use std::time::Instant;
 
 #[derive(Debug, Parser)]
@@ -53,8 +51,6 @@ impl Client {
 
     pub async fn poll_for_job(&self) -> anyhow::Result<()> {
 
-        //let config = Arc::clone(&self.client_prover.config);
-
         loop {
             let response: Result<Job, _> = self.client.request("get_job", None).await;
 
@@ -68,12 +64,8 @@ impl Client {
                     println!("{}", result);
 
                     let setup_data = get_setup_data(self.setup_load_mode.clone(), proof_job.setup_data_key.clone()).context("get_setup_data()").unwrap();
-                    let started_at = Instant::now();
-                    //let proof_artifact = self.client_prover.prove(proof_job, self.client_prover.config.clone(), setup_data, job.request_id);
                     let proof_artifact = self.client_prover.prove(proof_job, setup_data, job.request_id);
-                    println!("Finished proving, took: {:?}", started_at.elapsed());
                     let job_result = JobResult::new(job.request_id, proof_artifact);
-
                     let result_json = serde_json::to_value(job_result)?;
                     let params = ParamsSer::Array(vec![result_json]);
                     let submit_response: Result<(), _> = self.client.request("submit_result", Some(params)).await;

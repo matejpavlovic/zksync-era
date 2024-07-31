@@ -73,11 +73,11 @@ impl Prover {
 
     pub fn prove(&self,
                  job: ProverJob,
-                 //config: Arc<FriProverConfig>,
                  setup_data: Arc<GoldilocksProverSetupData>,
                  request_id: u32,
     ) -> ProverArtifacts {
-        println!("PROVING.");
+        println!("Proving.");
+        let started_at = Instant::now();
 
         let proof_wrapper = match job.circuit_wrapper {
             CircuitWrapper::Base(base_circuit) => {
@@ -88,7 +88,7 @@ impl Prover {
             }
         };
 
-        println!("Done PROVING.");
+        println!("Finished proving, took: {:?}", started_at.elapsed());
         ProverArtifacts::new(job.block_number, proof_wrapper)
     }
 
