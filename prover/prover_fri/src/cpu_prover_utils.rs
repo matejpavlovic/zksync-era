@@ -14,12 +14,13 @@ use zksync_prover_fri_types::{circuit_definitions::{
     },
     recursion_layer_proof_config,
 }, CircuitWrapper, FriProofWrapper, ProverJob, ProverServiceDataKey};
-use zksync_types::{basic_fri_types::CircuitIdRoundTuple, protocol_version::ProtocolSemanticVersion};
+use zksync_types::{basic_fri_types::CircuitIdRoundTuple};
 use zksync_vk_setup_data_server_fri::{keystore::Keystore, GoldilocksProverSetupData};
+
+use zksync_core_leftovers::temp_config_store::load_general_config;
 
 use crate::{metrics::{CircuitLabels, Layer, METRICS}, utils::{setup_metadata_to_setup_data_key, get_setup_data_key, verify_proof, ProverArtifacts}};
 use crate::utils::{F, H};
-
 
 #[derive(Clone)]
 pub enum SetupLoadMode {
@@ -31,23 +32,24 @@ pub struct Prover {
     pub config: Arc<FriProverConfig>,
     pub setup_load_mode: SetupLoadMode,
     circuit_ids_for_round_to_be_proven: Vec<CircuitIdRoundTuple>,
-    protocol_version: ProtocolSemanticVersion,
 }
 
 impl Prover {
     #[allow(dead_code)]
     pub fn new(
-        config: FriProverConfig,
-        setup_load_mode: SetupLoadMode,
-        circuit_ids_for_round_to_be_proven: Vec<CircuitIdRoundTuple>,
-        protocol_version: ProtocolSemanticVersion,
-    ) -> Self {
-        Prover {
-            config: Arc::new(config),
+        config_path: core::option::Option<std::path::PathBuf>,
+    ) -> anyhow::Result<Self> {
+
+        let general_config = load_general_config(config_path).context("general config")?;
+        let prover_config = general_config.prover_config.context("fri_prover config")?;
+        let setup_load_mode = load_setup_data_cache(&prover_config).context("load_setup_data_cache()")?;
+        let circuit_ids_for_round_to_be_proven = vec![CircuitIdRoundTuple::new(4, 0)];
+
+        Ok(Prover {
+            config: Arc::new(prover_config),
             setup_load_mode,
             circuit_ids_for_round_to_be_proven,
-            protocol_version,
-        }
+        })
     }
 
     pub fn prove(&self,

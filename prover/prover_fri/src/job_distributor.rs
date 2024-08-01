@@ -62,13 +62,11 @@ impl Server {
             let circuit_wrapper = <CircuitWrapper as StoredObject>::deserialize(buffer).expect("Deserialization of circuit wrapper.");
             let setup_data_key = ProverServiceDataKey::new(4, AggregationRound::BasicCircuits);
             let proof_job = ProverJob::new(L1BatchNumber(1), 10, circuit_wrapper, setup_data_key);
-            let job = Job { request_id: req_id, proof_job: proof_job.clone() };
-
             let mut jobs = jobs_clone.write().unwrap();
             jobs.insert(req_id, proof_job.clone());
             println!("Job {} with request id {} inserted.", proof_job.job_id, req_id);
 
-            Ok(job)
+            Ok(Job { request_id: req_id, proof_job })
         })?;
 
         let jobs_clone = Arc::clone(&self.jobs);
