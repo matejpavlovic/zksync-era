@@ -35,8 +35,7 @@ struct Server {
 
 impl Server {
     pub async fn new(server_addr: SocketAddr, max_size: u32) -> Result<Self> {
-        let opt = Cli::parse();
-        let general_config = load_general_config(opt.config_path).context("general config")?;
+        let general_config = load_general_config(Cli::parse().config_path).context("general config")?;
         let prover_config = general_config.prover_config.context("fri_prover config")?;
 
         Ok(Self {

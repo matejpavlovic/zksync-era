@@ -1,11 +1,9 @@
 #![feature(generic_const_exprs)]
-use anyhow::Context as _;
 use clap::Parser;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::types::params::ParamsSer;
 use tokio;
-use zksync_types::basic_fri_types::CircuitIdRoundTuple;
 use zksync_prover_fri::cpu_prover_utils::*;
 
 #[derive(Debug, Parser)]
@@ -28,7 +26,7 @@ impl Client {
     pub async fn new(server_url: &str, max_size: u32) -> anyhow::Result<Self> {
         let client = HttpClientBuilder::default().max_request_body_size(max_size).build(server_url)?;
         let client_prover = Prover::new(Cli::parse().config_path).unwrap();
-        Ok(Self { client, client_prover })
+        Ok( Self { client, client_prover } )
     }
 
     pub async fn poll_for_job(&self) -> anyhow::Result<()> {
