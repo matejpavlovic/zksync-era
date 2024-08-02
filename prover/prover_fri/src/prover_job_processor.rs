@@ -110,7 +110,7 @@ impl Prover {
                 Self::prove_recursive_layer(job.job_id, recursive_circuit, config, setup_data)
             }
         };
-        ProverArtifacts::new(job.block_number, proof)
+        ProverArtifacts::new(job.block_number, proof, 0)
     }
 
     fn prove_recursive_layer(

@@ -11,10 +11,12 @@ use tokio::signal;
 use tokio::sync::oneshot;
 use zksync_core_leftovers::temp_config_store::load_general_config;
 use zksync_object_store::StoredObject;
-use zksync_prover_fri::cpu_prover_utils::{get_setup_data, Job, JobResult, load_setup_data_cache, SetupLoadMode, verify_proof_artifact};
+use zksync_prover_fri::cpu_prover_utils::{get_setup_data, load_setup_data_cache, SetupLoadMode, verify_proof_artifact};
 use zksync_prover_fri_types::{CircuitWrapper, ProverJob, ProverServiceDataKey};
 use zksync_types::basic_fri_types::AggregationRound;
 use zksync_types::L1BatchNumber;
+use zksync_prover_fri::utils::ProverArtifacts;
+
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
@@ -60,23 +62,24 @@ impl Server {
 
             let circuit_wrapper = <CircuitWrapper as StoredObject>::deserialize(buffer).expect("Deserialization of circuit wrapper.");
             let setup_data_key = ProverServiceDataKey::new(4, AggregationRound::BasicCircuits);
-            let proof_job = ProverJob::new(L1BatchNumber(1), 10, circuit_wrapper, setup_data_key);
+            let proof_job = ProverJob::new(L1BatchNumber(1), 10, circuit_wrapper, setup_data_key, req_id);
             let mut jobs = jobs_clone.write().unwrap();
             jobs.insert(req_id, proof_job.clone());
             println!("Job {} with request id {} inserted.", proof_job.job_id, req_id);
 
-            Ok(Job { request_id: req_id, proof_job })
+            //Ok(Job { request_id: req_id, proof_job })
+            Ok(proof_job)
         })?;
 
         let jobs_clone = Arc::clone(&self.jobs);
         let setup_load_mode_clone = self.setup_load_mode.clone();
         module.register_method("submit_result", move |params, _| {
-            let job_result: JobResult = params.one()?;
+            let proof_artifact: ProverArtifacts = params.one()?;
             let mut jobs = jobs_clone.write().unwrap();
-            if let Some(job) = jobs.remove(&job_result.request_id) {
-                println!("Received proof artifact for job {} with request id {}.", job.job_id, job_result.request_id);
+            if let Some(job) = jobs.remove(&proof_artifact.request_id) {
+                println!("Received proof artifact for job {} with request id {}.", job.job_id, job.request_id);
                 let setup_data = get_setup_data(setup_load_mode_clone.clone(), job.setup_data_key.clone()).context("get_setup_data()").unwrap();
-                verify_proof_artifact(job_result, job, &setup_data.vk);
+                verify_proof_artifact(proof_artifact, job, &setup_data.vk);
                 Ok(())
             } else {
                 Err(jsonrpsee::core::Error::Custom("Job not found".into()))

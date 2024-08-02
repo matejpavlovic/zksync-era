@@ -41,13 +41,15 @@ pub type SharedWitnessVectorQueue = Arc<Mutex<FixedSizeQueue<GpuProverJob>>>;
 pub struct ProverArtifacts {
     block_number: L1BatchNumber,
     pub proof_wrapper: FriProofWrapper,
+    pub request_id: u32,
 }
 
 impl ProverArtifacts {
-    pub fn new(block_number: L1BatchNumber, proof_wrapper: FriProofWrapper) -> Self {
+    pub fn new(block_number: L1BatchNumber, proof_wrapper: FriProofWrapper, request_id: u32) -> Self {
         Self {
             block_number,
             proof_wrapper,
+            request_id,
         }
     }
 }

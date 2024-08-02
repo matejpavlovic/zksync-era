@@ -4,7 +4,8 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::types::params::ParamsSer;
 use tokio;
-use zksync_prover_fri::cpu_prover_utils::*;
+use zksync_prover_fri::cpu_prover_utils::Prover;
+use zksync_prover_fri_types::ProverJob;
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
@@ -33,14 +34,14 @@ impl Client {
 
         loop {
             // Request a job
-            let response: Result<Job, _> = self.client.request("get_job", None).await;
+            let response: Result<ProverJob, _> = self.client.request("get_job", None).await;
 
             match response {
                 Ok(job) => {
-                        println!("Have to execute job {}, with block number {}, and request id {}.", job.proof_job.job_id, job.proof_job.block_number, job.request_id);
-                        let proof_artifact = self.client_prover.prove(job.proof_job, job.request_id);
-                        let job_result = JobResult::new(job.request_id, proof_artifact);
-                        let result_json = serde_json::to_value(job_result)?;
+                        println!("Have to execute job {}, with block number {}, and request id {}.", job.job_id, job.block_number, job.request_id);
+                        let req_id = job.request_id.clone();
+                        let proof_artifact = self.client_prover.prove(job);
+                        let result_json = serde_json::to_value(proof_artifact)?;
                         let params = ParamsSer::Array(vec![result_json]);
                         let submit_response: Result<(), _> = self.client.request("submit_result", Some(params)).await;
 

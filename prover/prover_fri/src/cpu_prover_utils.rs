@@ -54,7 +54,6 @@ impl Prover {
 
     pub fn prove(&self,
                  job: ProverJob,
-                 request_id: u32,
     ) -> ProverArtifacts {
 
         let setup_data = get_setup_data(self.setup_load_mode.clone(), job.setup_data_key.clone()).context("get_setup_data()").unwrap();
@@ -63,15 +62,15 @@ impl Prover {
 
         let proof_wrapper = match job.circuit_wrapper {
             CircuitWrapper::Base(base_circuit) => {
-                Self::prove_base_layer(job.job_id, base_circuit, self.config.clone(), setup_data, request_id)
+                Self::prove_base_layer(job.job_id, base_circuit, self.config.clone(), setup_data, job.request_id)
             }
             CircuitWrapper::Recursive(recursive_circuit) => {
-                Self::prove_recursive_layer(job.job_id, recursive_circuit, self.config.clone(), setup_data, request_id)
+                Self::prove_recursive_layer(job.job_id, recursive_circuit, self.config.clone(), setup_data, job.request_id)
             }
         };
 
         println!("Finished proving, took: {:?}", started_at.elapsed());
-        ProverArtifacts::new(job.block_number, proof_wrapper)
+        ProverArtifacts::new(job.block_number, proof_wrapper, job.request_id)
     }
 
     fn prove_recursive_layer(
@@ -143,14 +142,15 @@ impl Prover {
 
 }
 
-pub fn verify_proof_artifact(job_result: JobResult, job: ProverJob, vk: &VerificationKey<F, H>){
-    match (job_result.proof_artifact.proof_wrapper, job.circuit_wrapper) {
+pub fn verify_proof_artifact(proof_artifact: ProverArtifacts, job: ProverJob, vk: &VerificationKey<F, H>){
+    match (proof_artifact.proof_wrapper, job.circuit_wrapper) {
+
         (FriProofWrapper::Base(proof), CircuitWrapper::Base(base_circuit)) => {
-            verify_proof(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), &vk, job.job_id, job_result.request_id);
+            verify_proof(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), &vk, job.job_id, proof_artifact.request_id);
         }
 
         (FriProofWrapper::Recursive(proof), CircuitWrapper::Recursive(recursive_circuit)) => {
-            verify_proof(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), &vk, job.job_id, job_result.request_id);
+            verify_proof(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), &vk, job.job_id, proof_artifact.request_id);
         }
         _ => {}
     };
@@ -213,41 +213,4 @@ pub fn get_setup_data(
             Arc::new(artifact)
         }
     })
-}
-
-
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct Job {
-    pub request_id: u32,
-    pub proof_job: ProverJob,
-}
-
-impl Job {
-    pub fn new(
-        request_id: u32,
-        proof_job: ProverJob,
-    ) -> Self {
-        Self {
-            request_id,
-            proof_job,
-        }
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct JobResult {
-    pub request_id: u32,
-    pub proof_artifact: ProverArtifacts,
-}
-
-impl JobResult {
-    pub fn new(
-        request_id: u32,
-        proof_artifact: ProverArtifacts,
-    ) -> Self {
-        Self {
-            request_id,
-            proof_artifact,
-        }
-    }
 }
