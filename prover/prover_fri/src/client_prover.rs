@@ -31,29 +31,26 @@ impl Client {
     }
 
     pub async fn poll_for_job(&self) -> anyhow::Result<()> {
+        // Request a job
+        let response: Result<ProverJob, _> = self.client.request("get_job", None).await;
 
-        loop {
-            // Request a job
-            let response: Result<ProverJob, _> = self.client.request("get_job", None).await;
+        match response {
+            Ok(job) => {
+                println!("Have to execute job {}, with block number {}, and request id {}.", job.job_id, job.block_number, job.request_id);
+                let req_id = job.request_id.clone();
+                let proof_artifact = self.client_prover.prove(job);
+                let result_json = serde_json::to_value(proof_artifact)?;
+                let params = ParamsSer::Array(vec![result_json]);
+                let submit_response: Result<(), _> = self.client.request("submit_result", Some(params)).await;
 
-            match response {
-                Ok(job) => {
-                        println!("Have to execute job {}, with block number {}, and request id {}.", job.job_id, job.block_number, job.request_id);
-                        let req_id = job.request_id.clone();
-                        let proof_artifact = self.client_prover.prove(job);
-                        let result_json = serde_json::to_value(proof_artifact)?;
-                        let params = ParamsSer::Array(vec![result_json]);
-                        let submit_response: Result<(), _> = self.client.request("submit_result", Some(params)).await;
-
-                        match submit_response {
-                            Ok(_) => println!("Proof submitted and verified successfully."),
-                            Err(e) => eprintln!("Failed to submit proof: {}.", e),
-                        }
+                match submit_response {
+                    Ok(_) => println!("Proof submitted and verified successfully."),
+                    Err(e) => eprintln!("Failed to submit proof: {}.", e),
                 }
-
-            Err(e) => eprintln!("Error: {}.", e),
             }
+            Err(e) => eprintln!("Error: {}.", e),
         }
+        Ok(())
     }
 }
 
@@ -63,5 +60,7 @@ async fn main() -> anyhow::Result<()> {
     let server_url = &opt.server_url;
     let max_size: u32 = 20 * 1024 * 1024;
     let client = Client::new(server_url, max_size).await?;
-    client.poll_for_job().await
+    loop {
+        client.poll_for_job().await?;
+    }
 }
