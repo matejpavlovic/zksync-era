@@ -1,8 +1,8 @@
 #![feature(generic_const_exprs)]
 use clap::Parser;
-use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::types::params::ParamsSer;
+use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::rpc_params;
 use tokio;
 use zksync_prover_fri::cpu_prover_utils::Prover;
 use zksync_prover_fri_types::ProverJob;
@@ -25,23 +25,33 @@ struct Client {
 
 impl Client {
     pub async fn new(server_url: &str, max_size: u32) -> anyhow::Result<Self> {
-        let client = HttpClientBuilder::default().max_request_body_size(max_size).build(server_url)?;
+        let client = HttpClientBuilder::default()
+            .max_request_size(max_size)
+            .build(server_url)?;
         let client_prover = Prover::new(Cli::parse().config_path).unwrap();
-        Ok( Self { client, client_prover } )
+        Ok(Self {
+            client,
+            client_prover,
+        })
     }
 
     pub async fn poll_for_job(&self) -> anyhow::Result<()> {
         // Request a job
-        let response: Result<ProverJob, _> = self.client.request("get_job", None).await;
+        let response: Result<ProverJob, _> = self.client.request("get_job", rpc_params![]).await;
 
         match response {
             Ok(job) => {
-                println!("Have to execute job {}, with block number {}, and request id {}.", job.job_id, job.block_number, job.request_id);
+                println!(
+                    "H ave to execute job {}, with block number {}, and request id {}.",
+                    job.job_id, job.block_number, job.request_id
+                );
                 let req_id = job.request_id.clone();
                 let proof_artifact = self.client_prover.prove(job);
                 let result_json = serde_json::to_value(proof_artifact)?;
-                let params = ParamsSer::Array(vec![result_json]);
-                let submit_response: Result<(), _> = self.client.request("submit_result", Some(params)).await;
+                let submit_response: Result<(), _> = self
+                    .client
+                    .request("submit_result", rpc_params![result_json])
+                    .await;
 
                 match submit_response {
                     Ok(_) => println!("Proof submitted and verified successfully."),
