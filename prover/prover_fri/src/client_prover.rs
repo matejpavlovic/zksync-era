@@ -43,8 +43,8 @@ impl Client {
         match response {
             Ok(job) => {
                 println!(
-                    "Have to execute job {}, with block number {}, and request id {}.",
-                    job.job_id, job.block_number, job.request_id
+                    "Have to execute job {} with request id {}.",
+                    job.job_id, job.request_id
                 );
                 let req_id = job.request_id.clone();
                 let proof_artifact = self.client_prover.prove(job);

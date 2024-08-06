@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-
 use anyhow::{Context, Result};
 use clap::Parser;
 use jsonrpsee::server::RpcModule;
@@ -100,9 +99,10 @@ impl Server {
             let server = server.clone();
             async move {
                 let req_id = server.request_id.fetch_add(1, Ordering::SeqCst) as u32;
-                let proof_job_option = server.get_next_job().await.map_err(|_e| ErrorObject::from(ErrorCode::InternalError))?;
+                let proof_job_option = server.get_next_job(req_id).await.map_err(|_e| ErrorObject::from(ErrorCode::InternalError))?;
 
                 if let Some(proof_job) = proof_job_option {
+                    // Insert the job in the hash table
                     let mut jobs = server.jobs.write().await;
                     jobs.insert(req_id, proof_job.clone());
                     println!("Job {} with request id {} inserted.", proof_job.job_id, req_id);
@@ -135,13 +135,14 @@ impl Server {
         Ok(())
     }
 
-    async fn get_next_job(&self) -> anyhow::Result<Option<ProverJob>> {
+    async fn get_next_job(&self, req_id: u32) -> anyhow::Result<Option<ProverJob>> {
         let mut storage = self.pool.connection().await.unwrap();
         let Some(job) = fetch_next_circuit(
             &mut storage,
             &*self.object_store,
             &self.circuit_ids_for_round_to_be_proven,
             &self.protocol_version,
+            req_id,
         )
             .await
         else {
