@@ -14,7 +14,6 @@ use zksync_prover_fri_types::{circuit_definitions::{
     },
     recursion_layer_proof_config,
 }, CircuitWrapper, FriProofWrapper, ProverJob, ProverServiceDataKey};
-use zksync_types::{basic_fri_types::CircuitIdRoundTuple};
 use zksync_vk_setup_data_server_fri::{keystore::Keystore, GoldilocksProverSetupData};
 
 use zksync_core_leftovers::temp_config_store::load_general_config;

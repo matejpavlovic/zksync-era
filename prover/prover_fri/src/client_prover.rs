@@ -27,6 +27,7 @@ impl Client {
     pub async fn new(server_url: &str, max_size: u32) -> anyhow::Result<Self> {
         let client = HttpClientBuilder::default()
             .max_request_size(max_size)
+            .max_response_size(max_size)
             .build(server_url)?;
         let client_prover = Prover::new(Cli::parse().config_path).unwrap();
         Ok(Self {

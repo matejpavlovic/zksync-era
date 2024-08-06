@@ -1,7 +1,5 @@
 use jsonrpsee::types::{ErrorCode, ErrorObject};
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Read;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -12,7 +10,6 @@ use jsonrpsee::server::RpcModule;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::signal;
 use tokio::sync::oneshot;
-use zksync_config::configs::FriProverConfig;
 use zksync_core_leftovers::temp_config_store::{load_database_secrets, load_general_config};
 use zksync_env_config::object_store::ProverObjectStoreConfig;
 use zksync_object_store::ObjectStore;
@@ -22,7 +19,7 @@ use zksync_prover_fri_types::PROVER_PROTOCOL_SEMANTIC_VERSION;
 use zksync_prover_fri_utils::fetch_next_circuit;
 use zksync_prover_fri_utils::get_all_circuit_id_round_tuples_for;
 use zksync_types::{
-    basic_fri_types::{AggregationRound, CircuitIdRoundTuple},
+    basic_fri_types::CircuitIdRoundTuple,
     protocol_version::ProtocolSemanticVersion,
 };
 
@@ -30,8 +27,7 @@ use zksync_prover_fri::cpu_prover_utils::{
     get_setup_data, load_setup_data_cache, verify_proof_artifact, SetupLoadMode,
 };
 use zksync_prover_fri::utils::ProverArtifacts;
-use zksync_prover_fri_types::{CircuitWrapper, ProverJob, ProverServiceDataKey};
-use zksync_types::L1BatchNumber;
+use zksync_prover_fri_types::ProverJob;
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
@@ -42,7 +38,6 @@ pub(crate) struct Cli {
     pub(crate) secrets_path: Option<std::path::PathBuf>,
 }
 
-#[derive(Clone)]
 struct Server {
     server_addr: SocketAddr,
     max_size: u32,
