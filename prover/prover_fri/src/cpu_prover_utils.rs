@@ -31,7 +31,6 @@ pub enum SetupLoadMode {
 pub struct Prover {
     pub config: Arc<FriProverConfig>,
     pub setup_load_mode: SetupLoadMode,
-    circuit_ids_for_round_to_be_proven: Vec<CircuitIdRoundTuple>,
 }
 
 impl Prover {
@@ -43,12 +42,10 @@ impl Prover {
         let general_config = load_general_config(config_path).context("general config")?;
         let prover_config = general_config.prover_config.context("fri_prover config")?;
         let setup_load_mode = load_setup_data_cache(&prover_config).context("load_setup_data_cache()")?;
-        let circuit_ids_for_round_to_be_proven = vec![CircuitIdRoundTuple::new(4, 0)];
 
         Ok(Prover {
             config: Arc::new(prover_config),
             setup_load_mode,
-            circuit_ids_for_round_to_be_proven,
         })
     }
 

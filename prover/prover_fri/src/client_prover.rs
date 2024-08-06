@@ -15,7 +15,7 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) secrets_path: Option<std::path::PathBuf>,
     #[arg(long)]
-    pub(crate) server_url: String, // New argument for server URL
+    pub(crate) server_url: String,
 }
 
 struct Client {
@@ -42,7 +42,7 @@ impl Client {
         match response {
             Ok(job) => {
                 println!(
-                    "H ave to execute job {}, with block number {}, and request id {}.",
+                    "Have to execute job {}, with block number {}, and request id {}.",
                     job.job_id, job.block_number, job.request_id
                 );
                 let req_id = job.request_id.clone();

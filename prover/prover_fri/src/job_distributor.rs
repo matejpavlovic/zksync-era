@@ -52,7 +52,6 @@ struct Server {
     object_store: Arc<dyn ObjectStore>,
     pool: ConnectionPool<Prover>,
     circuit_ids_for_round_to_be_proven: Vec<CircuitIdRoundTuple>,
-    prover_config: FriProverConfig,
     protocol_version: ProtocolSemanticVersion,
 }
 
@@ -96,7 +95,6 @@ impl Server {
             object_store,
             pool,
             circuit_ids_for_round_to_be_proven,
-            prover_config,
             protocol_version,
         })
     }
