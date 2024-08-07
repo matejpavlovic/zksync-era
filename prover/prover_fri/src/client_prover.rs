@@ -46,7 +46,6 @@ impl Client {
                     "Have to execute job {} with request id {}.",
                     job.job_id, job.request_id
                 );
-                let req_id = job.request_id.clone();
                 let proof_artifact = self.client_prover.prove(job);
                 let result_json = serde_json::to_value(proof_artifact)?;
                 let submit_response: Result<(), _> = self

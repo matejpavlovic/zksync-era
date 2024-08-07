@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use jsonrpsee::server::RpcModule;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Instant;
 use tokio::signal;
 use tokio::sync::oneshot;
 use zksync_core_leftovers::temp_config_store::{load_database_secrets, load_general_config};
@@ -21,12 +22,12 @@ use zksync_types::{
     basic_fri_types::CircuitIdRoundTuple,
     protocol_version::ProtocolSemanticVersion,
 };
-
 use zksync_prover_fri::cpu_prover_utils::{
     get_setup_data, load_setup_data_cache, verify_proof_artifact, SetupLoadMode,
 };
-use zksync_prover_fri::utils::ProverArtifacts;
+use zksync_prover_fri::utils::{ProverArtifacts, save_proof};
 use zksync_prover_fri_types::ProverJob;
+use zksync_config::configs::FriProverConfig;
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
@@ -43,10 +44,13 @@ struct Server {
     jobs: Arc<RwLock<HashMap<u32, ProverJob>>>,
     request_id: Arc<AtomicUsize>,
     setup_load_mode: SetupLoadMode,
+    prover_config: FriProverConfig,
     object_store: Arc<dyn ObjectStore>,
-    pool: ConnectionPool<Prover>,
+    prover_connection_pool: ConnectionPool<Prover>,
     circuit_ids_for_round_to_be_proven: Vec<CircuitIdRoundTuple>,
     protocol_version: ProtocolSemanticVersion,
+    blob_store: Arc<dyn ObjectStore>,
+    public_blob_store: Option<Arc<dyn ObjectStore>>,
 }
 
 impl Server {
@@ -58,19 +62,36 @@ impl Server {
             load_database_secrets(opt.secrets_path).context("database secrets")?;
         let protocol_version = PROVER_PROTOCOL_SEMANTIC_VERSION;
 
-        let pool = ConnectionPool::singleton(database_secrets.prover_url()?)
-            .build()
-            .await
-            .context("failed to build a connection pool")?;
+        let prover_connection_pool =
+            ConnectionPool::<Prover>::singleton(database_secrets.prover_url()?)
+                .build()
+                .await
+                .context("failed to build a prover_connection_pool")?;
         let object_store_config = ProverObjectStoreConfig(
             prover_config
                 .clone()
                 .prover_object_store
                 .context("object store")?,
         );
-        let object_store = ObjectStoreFactory::new(object_store_config.0)
+        let object_store = ObjectStoreFactory::new(object_store_config.0.clone())
             .create_store()
             .await?;
+        let store_factory = ObjectStoreFactory::new(object_store_config.0);
+        let public_object_store_config = prover_config
+            .public_object_store
+            .clone()
+            .context("public object store config")?;
+
+        let blob_store = store_factory.create_store().await?;
+        let public_blob_store = match prover_config.shall_save_to_public_bucket {
+            false => None,
+            true => Some(
+                ObjectStoreFactory::new(public_object_store_config)
+                    .create_store()
+                    .await?,
+            ),
+        };
+
         let circuit_ids_for_round_to_be_proven = general_config
             .prover_group_config
             .expect("prover_group_config")
@@ -86,10 +107,13 @@ impl Server {
             request_id: Arc::new(AtomicUsize::new(0)),
             setup_load_mode: load_setup_data_cache(&prover_config)
                 .context("load_setup_data_cache()")?,
+            prover_config,
             object_store,
-            pool,
+            prover_connection_pool,
             circuit_ids_for_round_to_be_proven,
             protocol_version,
+            blob_store,
+            public_blob_store
         })
     }
 
@@ -98,14 +122,16 @@ impl Server {
         module.register_async_method("get_job", move |_params, _,_| {
             let server = server.clone();
             async move {
-                let req_id = server.request_id.fetch_add(1, Ordering::SeqCst) as u32;
-                let proof_job_option = server.get_next_job(req_id).await.map_err(|_e| ErrorObject::from(ErrorCode::InternalError))?;
+                let _req_id = server.request_id.fetch_add(1, Ordering::SeqCst) as u32;
+                let proof_job_option = server.get_next_job(_req_id)
+                    .await
+                    .map_err(|_e| ErrorObject::from(ErrorCode::InternalError))?;
 
                 if let Some(proof_job) = proof_job_option {
                     // Insert the job in the hash table
                     let mut jobs = server.jobs.write().await;
-                    jobs.insert(req_id, proof_job.clone());
-                    println!("Job {} with request id {} inserted.", proof_job.job_id, req_id);
+                    jobs.insert(_req_id, proof_job.clone());
+                    println!("Job {} with request id {} inserted.", proof_job.job_id, _req_id);
                     Ok(proof_job)
                 } else {
                     println!("No job is available.");
@@ -123,7 +149,12 @@ impl Server {
                 if let Some(job) = jobs.remove(&proof_artifact.request_id) {
                     println!("Received proof artifact for job {} with request id {}.", job.job_id, job.request_id);
                     let setup_data = get_setup_data(server.setup_load_mode.clone(), job.setup_data_key.clone()).context("get_setup_data()").unwrap();
-                    verify_proof_artifact(proof_artifact, job, &setup_data.vk);
+                    verify_proof_artifact(proof_artifact.clone(), job.clone(), &setup_data.vk);
+                    let started_at = Instant::now();
+                    let _ = server.save_result(job.job_id, started_at, proof_artifact)
+                        .await
+                        .context("save_result()");
+                    println!("Wrote to DB that job {} has been successfully completed.", job.job_id);
                     Ok(())
                 } else {
                     println!("There is no current job with request id {}.", proof_artifact.request_id);
@@ -135,20 +166,42 @@ impl Server {
         Ok(())
     }
 
-    async fn get_next_job(&self, req_id: u32) -> anyhow::Result<Option<ProverJob>> {
-        let mut storage = self.pool.connection().await.unwrap();
+    async fn get_next_job(&self, _req_id: u32) -> anyhow::Result<Option<ProverJob>> {
+        let mut storage = self.prover_connection_pool.connection().await.unwrap();
         let Some(job) = fetch_next_circuit(
             &mut storage,
             &*self.object_store,
             &self.circuit_ids_for_round_to_be_proven,
             &self.protocol_version,
-            req_id,
+            _req_id,
         )
             .await
         else {
             return Ok(None);
         };
         Ok(Some(job))
+    }
+
+    async fn save_result(
+        &self,
+        job_id: u32,
+        started_at: Instant,
+        artifacts: ProverArtifacts,
+    ) -> anyhow::Result<()> {
+
+        let mut storage_processor = self.prover_connection_pool.connection().await.unwrap();
+        save_proof(
+            job_id,
+            started_at,
+            artifacts,
+            &*self.blob_store,
+            self.public_blob_store.as_deref(),
+            self.prover_config.shall_save_to_public_bucket,
+            &mut storage_processor,
+            self.protocol_version,
+        )
+            .await;
+        Ok(())
     }
 
     async fn run(self: Arc<Self>) -> anyhow::Result<()> {
