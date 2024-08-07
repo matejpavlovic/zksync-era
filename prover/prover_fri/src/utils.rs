@@ -120,38 +120,6 @@ pub fn verify_proof(
     proof: &Proof<F, H, Ext>,
     vk: &VerificationKey<F, H>,
     job_id: u32,
-    request_id: u32
-) {
-    println!("Verifying proof");
-    let started_at = Instant::now();
-    let (is_valid, circuit_id) = match circuit_wrapper {
-        CircuitWrapper::Base(base_circuit) => (
-            verify_base_layer_proof::<NoPow>(base_circuit, proof, vk),
-            base_circuit.numeric_circuit_type(),
-        ),
-        CircuitWrapper::Recursive(recursive_circuit) => (
-            verify_recursion_layer_proof::<NoPow>(recursive_circuit, proof, vk),
-            recursive_circuit.numeric_circuit_type(),
-        ),
-    };
-
-    if !is_valid {
-        let msg = format!("Failed to verify proof for job-id: {job_id} circuit_type {circuit_id}");
-        tracing::error!("{}", msg);
-        panic!("{}", msg);
-    }
-
-    else {
-        println!("Proof verification for job {} with request id {} succeeded, it took {:?}.", job_id, request_id, started_at.elapsed());
-    }
-}
-
-
-pub fn verify_proof_2(
-    circuit_wrapper: &CircuitWrapper,
-    proof: &Proof<F, H, Ext>,
-    vk: &VerificationKey<F, H>,
-    job_id: u32,
     request_id: u32,
 ) -> bool {
     println!("Verifying proof");

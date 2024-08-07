@@ -1,4 +1,4 @@
-#![feature(generic_const_exprs)]
+//#![feature(generic_const_exprs)]
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use anyhow::Context as _;
 use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
@@ -19,7 +19,6 @@ use zksync_vk_setup_data_server_fri::{keystore::Keystore, GoldilocksProverSetupD
 use zksync_core_leftovers::temp_config_store::load_general_config;
 
 use crate::{metrics::{CircuitLabels, Layer, METRICS}, utils::{setup_metadata_to_setup_data_key, get_setup_data_key, verify_proof, ProverArtifacts}};
-use crate::utils::{F, H};
 
 #[derive(Clone)]
 pub enum SetupLoadMode {

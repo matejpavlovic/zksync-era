@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use jsonrpsee::server::RpcModule;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::signal;
 use tokio::sync::oneshot;
 use zksync_core_leftovers::temp_config_store::{load_database_secrets, load_general_config};
@@ -28,33 +28,12 @@ use zksync_prover_fri::cpu_prover_utils::{
 use zksync_prover_fri::utils::{ProverArtifacts, save_proof};
 use zksync_prover_fri_types::ProverJob;
 use zksync_config::configs::FriProverConfig;
-use zksync_prover_fri::utils::verify_proof_2;
+use zksync_prover_fri::utils::verify_proof;
 
-use zksync_prover_fri_types::{circuit_definitions::{
-    base_layer_proof_config,
-    circuit_definitions::{
-        base_layer::{ZkSyncBaseLayerCircuit, ZkSyncBaseLayerProof},
-        recursion_layer::{ZkSyncRecursionLayerProof, ZkSyncRecursiveLayerCircuit},
-    },
-    recursion_layer_proof_config,
-}, CircuitWrapper, FriProofWrapper, ProverServiceDataKey};
+use zksync_prover_fri_types::{CircuitWrapper, FriProofWrapper};
 
-use zksync_prover_fri_types::{
-    circuit_definitions::{
-        boojum::{
-            algebraic_props::{
-                round_function::AbsorptionModeOverwrite, sponge::GoldilocksPoseidon2Sponge,
-            },
-            field::goldilocks::{GoldilocksExt2, GoldilocksField},
-        },
-        circuit_definitions::recursion_layer::{ZkSyncRecursionLayerStorageType,
-        },
-    },
-    queue::FixedSizeQueue, WitnessVectorArtifacts,
-};
 use zksync_prover_fri::utils::{F, H};
 use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
-
 
 
 #[derive(Debug, Parser)]
@@ -172,18 +151,23 @@ impl Server {
         module.register_async_method("submit_result", move |_params, _,_| {
             let server = server.clone();
             async move {
-                let proof_artifact: ProverArtifacts = _params.one()?;
-                let mut jobs = server.jobs.write().await;
-                if let Some(job) = jobs.remove(&proof_artifact.request_id) {
-                    println!("Received proof artifact for job {} with request id {}.", job.job_id, job.request_id);
-                    let setup_data = get_setup_data(server.setup_load_mode.clone(), job.setup_data_key.clone()).context("get_setup_data()").unwrap();
-                    let started_at = Instant::now();
-                    server.verify_and_save_proof(proof_artifact.clone(), job.clone(), &setup_data.vk, started_at);
-                    Ok(())
-                } else {
-                    println!("There is no current job with request id {}.", proof_artifact.request_id);
-                    Err(ErrorObject::from(ErrorCode::InternalError))
-                }
+                let timeout_duration = std::time::Duration::from_secs(600); // 10 minutes
+                let result = tokio::time::timeout(timeout_duration, async {
+                    let proof_artifact: ProverArtifacts = _params.one()?;
+                    let mut jobs = server.jobs.write().await;
+                    if let Some(job) = jobs.remove(&proof_artifact.request_id) {
+                        println!("Received proof artifact for job {} with request id {}.", job.job_id, job.request_id);
+                        let setup_data = get_setup_data(server.setup_load_mode.clone(), job.setup_data_key.clone()).context("get_setup_data()").unwrap();
+                        let started_at = Instant::now();
+                        server.verify_and_save_proof(proof_artifact.clone(), job.clone(), &setup_data.vk, started_at).await;
+                        Ok(())
+                    } else {
+                        println!("There is no current job with request id {}.", proof_artifact.request_id);
+                        Err(ErrorObject::from(ErrorCode::InternalError))
+                    }
+                }).await;
+
+                result.map_err(|_| ErrorObject::from(ErrorCode::ServerIsBusy))
             }
         })?;
 
@@ -209,10 +193,10 @@ impl Server {
     async fn verify_and_save_proof(&self, proof_artifact: ProverArtifacts, job: ProverJob, vk: &VerificationKey<F, H>, started_at: Instant) {
         let is_valid = match (proof_artifact.proof_wrapper.clone(), job.circuit_wrapper) {
             (FriProofWrapper::Base(proof), CircuitWrapper::Base(base_circuit)) => {
-                verify_proof_2(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
+                verify_proof(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
             }
             (FriProofWrapper::Recursive(proof), CircuitWrapper::Recursive(recursive_circuit)) => {
-                verify_proof_2(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
+                verify_proof(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
             }
             _ => false, // Handle the mismatched case by returning false
         };
@@ -253,6 +237,7 @@ impl Server {
 
     async fn run(self: Arc<Self>) -> anyhow::Result<()> {
         let server = jsonrpsee::server::Server::builder()
+            .max_request_body_size(self.max_size)
             .build(self.server_addr)
             .await?;
 
