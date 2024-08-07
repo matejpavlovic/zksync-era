@@ -23,11 +23,39 @@ use zksync_types::{
     protocol_version::ProtocolSemanticVersion,
 };
 use zksync_prover_fri::cpu_prover_utils::{
-    get_setup_data, load_setup_data_cache, verify_proof_artifact, SetupLoadMode,
+    get_setup_data, load_setup_data_cache, SetupLoadMode,
 };
 use zksync_prover_fri::utils::{ProverArtifacts, save_proof};
 use zksync_prover_fri_types::ProverJob;
 use zksync_config::configs::FriProverConfig;
+use zksync_prover_fri::utils::verify_proof_2;
+
+use zksync_prover_fri_types::{circuit_definitions::{
+    base_layer_proof_config,
+    circuit_definitions::{
+        base_layer::{ZkSyncBaseLayerCircuit, ZkSyncBaseLayerProof},
+        recursion_layer::{ZkSyncRecursionLayerProof, ZkSyncRecursiveLayerCircuit},
+    },
+    recursion_layer_proof_config,
+}, CircuitWrapper, FriProofWrapper, ProverServiceDataKey};
+
+use zksync_prover_fri_types::{
+    circuit_definitions::{
+        boojum::{
+            algebraic_props::{
+                round_function::AbsorptionModeOverwrite, sponge::GoldilocksPoseidon2Sponge,
+            },
+            field::goldilocks::{GoldilocksExt2, GoldilocksField},
+        },
+        circuit_definitions::recursion_layer::{ZkSyncRecursionLayerStorageType,
+        },
+    },
+    queue::FixedSizeQueue, WitnessVectorArtifacts,
+};
+use zksync_prover_fri::utils::{F, H};
+use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
+
+
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
@@ -149,12 +177,8 @@ impl Server {
                 if let Some(job) = jobs.remove(&proof_artifact.request_id) {
                     println!("Received proof artifact for job {} with request id {}.", job.job_id, job.request_id);
                     let setup_data = get_setup_data(server.setup_load_mode.clone(), job.setup_data_key.clone()).context("get_setup_data()").unwrap();
-                    verify_proof_artifact(proof_artifact.clone(), job.clone(), &setup_data.vk);
                     let started_at = Instant::now();
-                    let _ = server.save_result(job.job_id, started_at, proof_artifact)
-                        .await
-                        .context("save_result()");
-                    println!("Wrote to DB that job {} has been successfully completed.", job.job_id);
+                    server.verify_and_save_proof(proof_artifact.clone(), job.clone(), &setup_data.vk, started_at);
                     Ok(())
                 } else {
                     println!("There is no current job with request id {}.", proof_artifact.request_id);
@@ -180,6 +204,29 @@ impl Server {
             return Ok(None);
         };
         Ok(Some(job))
+    }
+
+    async fn verify_and_save_proof(&self, proof_artifact: ProverArtifacts, job: ProverJob, vk: &VerificationKey<F, H>, started_at: Instant) {
+        let is_valid = match (proof_artifact.proof_wrapper.clone(), job.circuit_wrapper) {
+            (FriProofWrapper::Base(proof), CircuitWrapper::Base(base_circuit)) => {
+                verify_proof_2(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
+            }
+            (FriProofWrapper::Recursive(proof), CircuitWrapper::Recursive(recursive_circuit)) => {
+                verify_proof_2(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
+            }
+            _ => false, // Handle the mismatched case by returning false
+        };
+
+        if is_valid {
+            let _ = self.save_result(job.job_id, started_at, proof_artifact)
+                .await
+                .context("save_result()");
+            println!("Wrote to DB that job {} has been successfully completed.", job.job_id);
+        } else {
+            let msg = format!("Proof verification failed for job: {}", job.job_id);
+            tracing::error!("{}", msg);
+            println!("{}", msg);
+        }
     }
 
     async fn save_result(

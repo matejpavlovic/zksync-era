@@ -138,7 +138,7 @@ impl Prover {
 
 }
 
-pub fn verify_proof_artifact(proof_artifact: ProverArtifacts, job: ProverJob, vk: &VerificationKey<F, H>){
+/*pub fn verify_and_save_proof(proof_artifact: ProverArtifacts, job: ProverJob, vk: &VerificationKey<F, H>){
     match (proof_artifact.proof_wrapper, job.circuit_wrapper) {
 
         (FriProofWrapper::Base(proof), CircuitWrapper::Base(base_circuit)) => {
@@ -151,7 +151,7 @@ pub fn verify_proof_artifact(proof_artifact: ProverArtifacts, job: ProverJob, vk
         _ => {}
     };
 
-}
+}*/
 
 #[allow(dead_code)]
 pub fn load_setup_data_cache(config: &FriProverConfig) -> anyhow::Result<SetupLoadMode> {
