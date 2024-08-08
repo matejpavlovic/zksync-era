@@ -18,6 +18,7 @@ use zksync_vk_setup_data_server_fri::{keystore::Keystore, GoldilocksProverSetupD
 use zksync_core_leftovers::temp_config_store::load_general_config;
 use crate::{metrics::{CircuitLabels, Layer, METRICS}, utils::{setup_metadata_to_setup_data_key, get_setup_data_key, verify_proof, ProverArtifacts, F, H}};
 
+
 #[derive(Clone)]
 pub enum SetupLoadMode {
     FromMemory(HashMap<ProverServiceDataKey, Arc<GoldilocksProverSetupData>>),
@@ -145,13 +146,6 @@ pub async fn verify_client_proof(proof_artifact: ProverArtifacts, job: ProverJob
         }
         _ => false, // Handle the mismatched case by returning false
     };
-
-    if is_valid {
-        println!("Proof verified successfully for job: {}", job.job_id);
-    } else {
-        println!("Proof verification failed for job: {}", job.job_id);
-    }
-
     is_valid
 }
 

@@ -30,6 +30,7 @@ use zksync_types::{
 
 use crate::metrics::METRICS;
 
+
 pub type F = GoldilocksField;
 pub type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 pub type Ext = GoldilocksExt2;
@@ -136,9 +137,7 @@ pub fn verify_proof(
     };
 
     if !is_valid {
-        let msg = format!("Failed to verify proof for job-id: {job_id} circuit_type {circuit_id}");
-        tracing::error!("{}", msg);
-        panic!("{}", msg);
+        println!("Failed to verify proof for job: {job_id} circuit_type {circuit_id}");
     } else {
         println!("Proof verification for job {} with request id {} succeeded, it took {:?}.", job_id, request_id, started_at.elapsed());
     }

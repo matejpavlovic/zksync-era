@@ -1,5 +1,4 @@
 #![feature(generic_const_exprs)]
-
 use clap::Parser;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
@@ -51,18 +50,15 @@ impl Client {
                 let proof_artifact = self.client_prover.prove(job);
                 let result_json = serde_json::to_value(proof_artifact)?;
 
-                let timeout_duration = std::time::Duration::from_secs(600); // 10 minutes
-                let _ = tokio::time::timeout(timeout_duration, async {
-                    let submit_response: Result<(), _> = self
-                        .client
-                        .request("submit_result", rpc_params![result_json])
-                        .await;
+                let submit_response: Result<(), _> = self
+                    .client
+                    .request("submit_result", rpc_params![result_json])
+                    .await;
 
-                    match submit_response {
-                        Ok(_) => println!("Proof submitted and verified successfully."),
-                        Err(e) => eprintln!("Failed to submit proof: {}.", e),
-                    }
-                }).await;
+                match submit_response {
+                    Ok(_) => println!("Proof submitted and verified successfully."),
+                    Err(e) => eprintln!("Failed to submit proof: {}.", e),
+                }
             }
             Err(e) => eprintln!("Error: {}.", e),
         }
