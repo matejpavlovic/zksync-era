@@ -1,4 +1,3 @@
-#![feature(generic_const_exprs)]
 use clap::Parser;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;

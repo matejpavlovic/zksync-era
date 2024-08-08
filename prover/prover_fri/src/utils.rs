@@ -1,7 +1,5 @@
 #![cfg_attr(not(feature = "gpu"), allow(unused_imports))]
-
 use std::{sync::Arc, time::Instant};
-
 use tokio::sync::Mutex;
 use zkevm_test_harness::prover_utils::{verify_base_layer_proof, verify_recursion_layer_proof};
 use zksync_object_store::ObjectStore;
@@ -27,7 +25,6 @@ use zksync_types::{
     protocol_version::ProtocolSemanticVersion,
     L1BatchNumber,
 };
-
 use crate::metrics::METRICS;
 
 

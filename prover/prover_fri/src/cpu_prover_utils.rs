@@ -1,4 +1,3 @@
-//#![feature(generic_const_exprs)]
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use anyhow::Context as _;
 use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
@@ -16,8 +15,7 @@ use zksync_prover_fri_types::{circuit_definitions::{
 }, CircuitWrapper, FriProofWrapper, ProverJob, ProverServiceDataKey};
 use zksync_vk_setup_data_server_fri::{keystore::Keystore, GoldilocksProverSetupData};
 use zksync_core_leftovers::temp_config_store::load_general_config;
-use crate::{metrics::{CircuitLabels, Layer, METRICS}, utils::{setup_metadata_to_setup_data_key, get_setup_data_key, verify_proof, ProverArtifacts, F, H}};
-
+use crate::utils::{setup_metadata_to_setup_data_key, get_setup_data_key, verify_proof, ProverArtifacts, F, H};
 
 #[derive(Clone)]
 pub enum SetupLoadMode {
@@ -90,12 +88,6 @@ impl Prover {
             &artifact.finalization_hint,
         );
 
-        /*let label = CircuitLabels {
-            circuit_type: circuit_id,
-            layer: Layer::Recursive,
-        };
-        METRICS.proof_generation_time[&label].observe(started_at.elapsed());*/
-
         verify_proof(&CircuitWrapper::Recursive(circuit), &proof, &artifact.vk, job_id, request_id);
         FriProofWrapper::Recursive(ZkSyncRecursionLayerProof::from_inner(circuit_id, proof))
 
@@ -123,12 +115,6 @@ impl Prover {
             &artifact.wits_hint,
             &artifact.finalization_hint,
         );
-
-        let label = CircuitLabels {
-            circuit_type: circuit_id,
-            layer: Layer::Base,
-        };
-        METRICS.proof_generation_time[&label].observe(started_at.elapsed());
 
         verify_proof(&CircuitWrapper::Base(circuit), &proof, &artifact.vk, job_id, request_id);
         FriProofWrapper::Base(ZkSyncBaseLayerProof::from_inner(circuit_id, proof))
@@ -199,7 +185,6 @@ pub fn get_setup_data(
             let artifact: GoldilocksProverSetupData = keystore
                 .load_cpu_setup_data_for_circuit_type(key.clone())
                 .context("get_cpu_setup_data_for_circuit_type()")?;
-            //METRICS.gpu_setup_data_load_time[&key.circuit_id.to_string()].observe(started_at.elapsed());
             println!("Setup data load time, took: {:?}", started_at.elapsed());
 
             Arc::new(artifact)
