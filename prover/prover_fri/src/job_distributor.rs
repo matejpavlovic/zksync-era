@@ -158,9 +158,10 @@ impl Server {
                             .context("get_setup_data()")
                             .unwrap();
                         let started_at = Instant::now();
-                        let is_valid = verify_client_proof(proof_artifact.clone(), job.clone(), &setup_data.vk).await;
+                        let job_id = job.job_id.clone();
+                        let is_valid = verify_client_proof(proof_artifact.clone(), job, &setup_data.vk).await;
                         if is_valid {
-                            server_clone.save_proof_to_db(job, proof_artifact, started_at).await;
+                            let _ = server_clone.save_proof_to_db(job_id, proof_artifact, started_at).await;
                         }
                     });
 
@@ -192,19 +193,11 @@ impl Server {
         Ok(Some(job))
     }
 
-    async fn save_proof_to_db(&self, job: ProverJob, proof_artifact: ProverArtifacts, started_at: Instant) {
-        if let Err(e) = self.save_result(job.job_id, started_at, proof_artifact).await {
-            println!("Failed to save proof for job {}: {:?}", job.job_id, e);
-        } else {
-            println!("Wrote to DB that job {} has been successfully completed.", job.job_id);
-        }
-    }
-
-    async fn save_result(
+    async fn save_proof_to_db(
         &self,
         job_id: u32,
-        started_at: Instant,
         artifacts: ProverArtifacts,
+        started_at: Instant,
     ) -> anyhow::Result<()> {
         // Error handling when getting connection
         let mut storage_processor = match self.prover_connection_pool.connection().await {
@@ -225,6 +218,7 @@ impl Server {
             &mut storage_processor,
             self.protocol_version,
         ).await;
+        println!("Wrote to DB that job {} has been successfully completed.", job_id);
         Ok(())
     }
 
