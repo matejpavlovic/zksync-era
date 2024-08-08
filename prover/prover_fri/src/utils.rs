@@ -1,7 +1,5 @@
 #![cfg_attr(not(feature = "gpu"), allow(unused_imports))]
-
 use std::{sync::Arc, time::Instant};
-
 use tokio::sync::Mutex;
 use zkevm_test_harness::prover_utils::{verify_base_layer_proof, verify_recursion_layer_proof};
 use zksync_object_store::ObjectStore;
@@ -27,8 +25,8 @@ use zksync_types::{
     protocol_version::ProtocolSemanticVersion,
     L1BatchNumber,
 };
-
 use crate::metrics::METRICS;
+
 
 pub type F = GoldilocksField;
 pub type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
@@ -120,8 +118,8 @@ pub fn verify_proof(
     proof: &Proof<F, H, Ext>,
     vk: &VerificationKey<F, H>,
     job_id: u32,
-    request_id: u32
-) {
+    request_id: u32,
+) -> bool {
     println!("Verifying proof");
     let started_at = Instant::now();
     let (is_valid, circuit_id) = match circuit_wrapper {
@@ -136,14 +134,12 @@ pub fn verify_proof(
     };
 
     if !is_valid {
-        let msg = format!("Failed to verify proof for job-id: {job_id} circuit_type {circuit_id}");
-        tracing::error!("{}", msg);
-        panic!("{}", msg);
-    }
-
-    else {
+        println!("Failed to verify proof for job: {job_id} circuit_type {circuit_id}");
+    } else {
         println!("Proof verification for job {} with request id {} succeeded, it took {:?}.", job_id, request_id, started_at.elapsed());
     }
+
+    is_valid
 }
 
 pub fn setup_metadata_to_setup_data_key(

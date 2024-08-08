@@ -198,6 +198,7 @@ impl JobProcessor for Prover {
             &*self.blob_store,
             &self.circuit_ids_for_round_to_be_proven,
             &self.protocol_version,
+            0,
         )
         .await
         else {

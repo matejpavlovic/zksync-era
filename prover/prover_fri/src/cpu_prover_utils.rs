@@ -1,4 +1,3 @@
-#![feature(generic_const_exprs)]
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use anyhow::Context as _;
 use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
@@ -14,13 +13,9 @@ use zksync_prover_fri_types::{circuit_definitions::{
     },
     recursion_layer_proof_config,
 }, CircuitWrapper, FriProofWrapper, ProverJob, ProverServiceDataKey};
-use zksync_types::{basic_fri_types::CircuitIdRoundTuple};
 use zksync_vk_setup_data_server_fri::{keystore::Keystore, GoldilocksProverSetupData};
-
 use zksync_core_leftovers::temp_config_store::load_general_config;
-
-use crate::{metrics::{CircuitLabels, Layer, METRICS}, utils::{setup_metadata_to_setup_data_key, get_setup_data_key, verify_proof, ProverArtifacts}};
-use crate::utils::{F, H};
+use crate::utils::{setup_metadata_to_setup_data_key, get_setup_data_key, verify_proof, ProverArtifacts, F, H};
 
 #[derive(Clone)]
 pub enum SetupLoadMode {
@@ -31,7 +26,6 @@ pub enum SetupLoadMode {
 pub struct Prover {
     pub config: Arc<FriProverConfig>,
     pub setup_load_mode: SetupLoadMode,
-    circuit_ids_for_round_to_be_proven: Vec<CircuitIdRoundTuple>,
 }
 
 impl Prover {
@@ -43,12 +37,10 @@ impl Prover {
         let general_config = load_general_config(config_path).context("general config")?;
         let prover_config = general_config.prover_config.context("fri_prover config")?;
         let setup_load_mode = load_setup_data_cache(&prover_config).context("load_setup_data_cache()")?;
-        let circuit_ids_for_round_to_be_proven = vec![CircuitIdRoundTuple::new(4, 0)];
 
         Ok(Prover {
             config: Arc::new(prover_config),
             setup_load_mode,
-            circuit_ids_for_round_to_be_proven,
         })
     }
 
@@ -96,12 +88,6 @@ impl Prover {
             &artifact.finalization_hint,
         );
 
-        /*let label = CircuitLabels {
-            circuit_type: circuit_id,
-            layer: Layer::Recursive,
-        };
-        METRICS.proof_generation_time[&label].observe(started_at.elapsed());*/
-
         verify_proof(&CircuitWrapper::Recursive(circuit), &proof, &artifact.vk, job_id, request_id);
         FriProofWrapper::Recursive(ZkSyncRecursionLayerProof::from_inner(circuit_id, proof))
 
@@ -130,31 +116,23 @@ impl Prover {
             &artifact.finalization_hint,
         );
 
-        let label = CircuitLabels {
-            circuit_type: circuit_id,
-            layer: Layer::Base,
-        };
-        METRICS.proof_generation_time[&label].observe(started_at.elapsed());
-
         verify_proof(&CircuitWrapper::Base(circuit), &proof, &artifact.vk, job_id, request_id);
         FriProofWrapper::Base(ZkSyncBaseLayerProof::from_inner(circuit_id, proof))
     }
 
 }
 
-pub fn verify_proof_artifact(proof_artifact: ProverArtifacts, job: ProverJob, vk: &VerificationKey<F, H>){
-    match (proof_artifact.proof_wrapper, job.circuit_wrapper) {
-
+pub async fn verify_client_proof(proof_artifact: ProverArtifacts, job: ProverJob, vk: &VerificationKey<F, H>) -> bool {
+    let is_valid = match (proof_artifact.proof_wrapper.clone(), job.circuit_wrapper) {
         (FriProofWrapper::Base(proof), CircuitWrapper::Base(base_circuit)) => {
-            verify_proof(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), &vk, job.job_id, proof_artifact.request_id);
+            verify_proof(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
         }
-
         (FriProofWrapper::Recursive(proof), CircuitWrapper::Recursive(recursive_circuit)) => {
-            verify_proof(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), &vk, job.job_id, proof_artifact.request_id);
+            verify_proof(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
         }
-        _ => {}
+        _ => false, // Handle the mismatched case by returning false
     };
-
+    is_valid
 }
 
 #[allow(dead_code)]
@@ -207,7 +185,6 @@ pub fn get_setup_data(
             let artifact: GoldilocksProverSetupData = keystore
                 .load_cpu_setup_data_for_circuit_type(key.clone())
                 .context("get_cpu_setup_data_for_circuit_type()")?;
-            //METRICS.gpu_setup_data_load_time[&key.circuit_id.to_string()].observe(started_at.elapsed());
             println!("Setup data load time, took: {:?}", started_at.elapsed());
 
             Arc::new(artifact)
