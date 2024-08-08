@@ -25,8 +25,6 @@ use zksync_types::{
     protocol_version::ProtocolSemanticVersion,
     L1BatchNumber,
 };
-use crate::metrics::METRICS;
-
 
 pub type F = GoldilocksField;
 pub type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
@@ -68,13 +66,7 @@ pub async fn save_proof(
     connection: &mut Connection<'_, Prover>,
     protocol_version: ProtocolSemanticVersion,
 ) {
-    tracing::info!(
-        "Successfully proven job: {}, total time taken: {:?}",
-        job_id,
-        started_at.elapsed()
-    );
     let proof = artifacts.proof_wrapper;
-
     // We save the scheduler proofs in public bucket,
     // so that it can be verified independently while we're doing shadow proving
     let (circuit_type, is_scheduler_proof) = match &proof {
@@ -94,10 +86,7 @@ pub async fn save_proof(
         },
     };
 
-    let blob_save_started_at = Instant::now();
     let blob_url = blob_store.put(job_id, &proof).await.unwrap();
-
-    METRICS.blob_save_time[&circuit_type.to_string()].observe(blob_save_started_at.elapsed());
 
     let mut transaction = connection.start_transaction().await.unwrap();
     transaction

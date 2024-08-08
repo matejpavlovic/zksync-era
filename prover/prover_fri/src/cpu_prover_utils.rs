@@ -74,7 +74,6 @@ impl Prover {
     ) -> FriProofWrapper {
         let worker = Worker::new();
         let circuit_id = circuit.numeric_circuit_type();
-        //let started_at = Instant::now();
         let proof = prove_recursion_layer_circuit::<NoPow>(
             circuit.clone(),
             &worker,
@@ -102,7 +101,6 @@ impl Prover {
     ) -> FriProofWrapper {
         let worker = Worker::new();
         let circuit_id = circuit.numeric_circuit_type();
-        let started_at = Instant::now();
         let proof = prove_base_layer_circuit::<NoPow>(
             circuit.clone(),
             &worker,
