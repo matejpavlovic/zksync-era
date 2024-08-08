@@ -15,10 +15,8 @@ use zksync_prover_fri_types::{circuit_definitions::{
     recursion_layer_proof_config,
 }, CircuitWrapper, FriProofWrapper, ProverJob, ProverServiceDataKey};
 use zksync_vk_setup_data_server_fri::{keystore::Keystore, GoldilocksProverSetupData};
-
 use zksync_core_leftovers::temp_config_store::load_general_config;
-
-use crate::{metrics::{CircuitLabels, Layer, METRICS}, utils::{setup_metadata_to_setup_data_key, get_setup_data_key, verify_proof, ProverArtifacts}};
+use crate::{metrics::{CircuitLabels, Layer, METRICS}, utils::{setup_metadata_to_setup_data_key, get_setup_data_key, verify_proof, ProverArtifacts, F, H}};
 
 #[derive(Clone)]
 pub enum SetupLoadMode {
@@ -137,20 +135,25 @@ impl Prover {
 
 }
 
-/*pub fn verify_and_save_proof(proof_artifact: ProverArtifacts, job: ProverJob, vk: &VerificationKey<F, H>){
-    match (proof_artifact.proof_wrapper, job.circuit_wrapper) {
-
+pub async fn verify_client_proof(proof_artifact: ProverArtifacts, job: ProverJob, vk: &VerificationKey<F, H>) -> bool {
+    let is_valid = match (proof_artifact.proof_wrapper.clone(), job.circuit_wrapper) {
         (FriProofWrapper::Base(proof), CircuitWrapper::Base(base_circuit)) => {
-            verify_proof(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), &vk, job.job_id, proof_artifact.request_id);
+            verify_proof(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
         }
-
         (FriProofWrapper::Recursive(proof), CircuitWrapper::Recursive(recursive_circuit)) => {
-            verify_proof(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), &vk, job.job_id, proof_artifact.request_id);
+            verify_proof(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
         }
-        _ => {}
+        _ => false, // Handle the mismatched case by returning false
     };
 
-}*/
+    if is_valid {
+        println!("Proof verified successfully for job: {}", job.job_id);
+    } else {
+        println!("Proof verification failed for job: {}", job.job_id);
+    }
+
+    is_valid
+}
 
 #[allow(dead_code)]
 pub fn load_setup_data_cache(config: &FriProverConfig) -> anyhow::Result<SetupLoadMode> {

@@ -1,4 +1,5 @@
 #![feature(generic_const_exprs)]
+
 use clap::Parser;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
@@ -6,6 +7,7 @@ use jsonrpsee::rpc_params;
 use tokio;
 use zksync_prover_fri::cpu_prover_utils::Prover;
 use zksync_prover_fri_types::ProverJob;
+
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
@@ -48,15 +50,19 @@ impl Client {
                 );
                 let proof_artifact = self.client_prover.prove(job);
                 let result_json = serde_json::to_value(proof_artifact)?;
-                let submit_response: Result<(), _> = self
-                    .client
-                    .request("submit_result", rpc_params![result_json])
-                    .await;
 
-                match submit_response {
-                    Ok(_) => println!("Proof submitted and verified successfully."),
-                    Err(e) => eprintln!("Failed to submit proof: {}.", e),
-                }
+                let timeout_duration = std::time::Duration::from_secs(600); // 10 minutes
+                let _ = tokio::time::timeout(timeout_duration, async {
+                    let submit_response: Result<(), _> = self
+                        .client
+                        .request("submit_result", rpc_params![result_json])
+                        .await;
+
+                    match submit_response {
+                        Ok(_) => println!("Proof submitted and verified successfully."),
+                        Err(e) => eprintln!("Failed to submit proof: {}.", e),
+                    }
+                }).await;
             }
             Err(e) => eprintln!("Error: {}.", e),
         }

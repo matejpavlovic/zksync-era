@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use jsonrpsee::server::RpcModule;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio::signal;
 use tokio::sync::oneshot;
 use zksync_core_leftovers::temp_config_store::{load_database_secrets, load_general_config};
@@ -22,19 +22,10 @@ use zksync_types::{
     basic_fri_types::CircuitIdRoundTuple,
     protocol_version::ProtocolSemanticVersion,
 };
-use zksync_prover_fri::cpu_prover_utils::{
-    get_setup_data, load_setup_data_cache, SetupLoadMode,
-};
+use zksync_prover_fri::cpu_prover_utils::{get_setup_data, load_setup_data_cache, SetupLoadMode, verify_client_proof};
 use zksync_prover_fri::utils::{ProverArtifacts, save_proof};
 use zksync_prover_fri_types::ProverJob;
 use zksync_config::configs::FriProverConfig;
-use zksync_prover_fri::utils::verify_proof;
-
-use zksync_prover_fri_types::{CircuitWrapper, FriProofWrapper};
-
-use zksync_prover_fri::utils::{F, H};
-use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
-
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
@@ -148,28 +139,40 @@ impl Server {
         })?;
 
         let server = self.clone();
-        module.register_async_method("submit_result", move |_params, _,_| {
+        module.register_async_method("submit_result", move |_params, _, _| {
             let server = server.clone();
             async move {
-                let timeout_duration = std::time::Duration::from_secs(600); // 10 minutes
-                let result = tokio::time::timeout(timeout_duration, async {
-                    let proof_artifact: ProverArtifacts = _params.one()?;
-                    let mut jobs = server.jobs.write().await;
-                    if let Some(job) = jobs.remove(&proof_artifact.request_id) {
-                        println!("Received proof artifact for job {} with request id {}.", job.job_id, job.request_id);
-                        let setup_data = get_setup_data(server.setup_load_mode.clone(), job.setup_data_key.clone()).context("get_setup_data()").unwrap();
-                        let started_at = Instant::now();
-                        server.verify_and_save_proof(proof_artifact.clone(), job.clone(), &setup_data.vk, started_at).await;
-                        Ok(())
-                    } else {
-                        println!("There is no current job with request id {}.", proof_artifact.request_id);
-                        Err(ErrorObject::from(ErrorCode::InternalError))
-                    }
-                }).await;
+                let proof_artifact: ProverArtifacts = _params.one()?;
+                let mut jobs = server.jobs.write().await;
+                if let Some(job) = jobs.remove(&proof_artifact.request_id) {
+                    println!("Received proof artifact for job {} with request id {}.", job.job_id, job.request_id);
 
-                result.map_err(|_| ErrorObject::from(ErrorCode::ServerIsBusy))
+                    // Clone necessary parts before moving into async block
+                    let setup_load_mode = server.setup_load_mode.clone();
+                    let setup_data_key = job.setup_data_key.clone();
+                    let server_clone = server.clone();
+
+                    // Respond to the client immediately
+                    tokio::spawn(async move {
+                        let setup_data = get_setup_data(setup_load_mode, setup_data_key)
+                            .context("get_setup_data()")
+                            .unwrap();
+                        let started_at = Instant::now();
+                        let is_valid = verify_client_proof(proof_artifact.clone(), job.clone(), &setup_data.vk).await;
+                        if is_valid {
+                            server_clone.save_proof_to_db(job, proof_artifact, started_at).await;
+                        }
+                    });
+
+                    // Respond with success
+                    Ok(())
+                } else {
+                    println!("There is no current job with request id {}.", proof_artifact.request_id);
+                    Err(ErrorObject::from(ErrorCode::InternalError))
+                }
             }
         })?;
+
 
         Ok(())
     }
@@ -190,26 +193,11 @@ impl Server {
         Ok(Some(job))
     }
 
-    async fn verify_and_save_proof(&self, proof_artifact: ProverArtifacts, job: ProverJob, vk: &VerificationKey<F, H>, started_at: Instant) {
-        let is_valid = match (proof_artifact.proof_wrapper.clone(), job.circuit_wrapper) {
-            (FriProofWrapper::Base(proof), CircuitWrapper::Base(base_circuit)) => {
-                verify_proof(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
-            }
-            (FriProofWrapper::Recursive(proof), CircuitWrapper::Recursive(recursive_circuit)) => {
-                verify_proof(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
-            }
-            _ => false, // Handle the mismatched case by returning false
-        };
-
-        if is_valid {
-            let _ = self.save_result(job.job_id, started_at, proof_artifact)
-                .await
-                .context("save_result()");
-            println!("Wrote to DB that job {} has been successfully completed.", job.job_id);
+    async fn save_proof_to_db(&self, job: ProverJob, proof_artifact: ProverArtifacts, started_at: Instant) {
+        if let Err(e) = self.save_result(job.job_id, started_at, proof_artifact).await {
+            println!("Failed to save proof for job {}: {:?}", job.job_id, e);
         } else {
-            let msg = format!("Proof verification failed for job: {}", job.job_id);
-            tracing::error!("{}", msg);
-            println!("{}", msg);
+            println!("Wrote to DB that job {} has been successfully completed.", job.job_id);
         }
     }
 
@@ -219,8 +207,15 @@ impl Server {
         started_at: Instant,
         artifacts: ProverArtifacts,
     ) -> anyhow::Result<()> {
+        // Error handling when getting connection
+        let mut storage_processor = match self.prover_connection_pool.connection().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                println!("Failed to get connection for job {}: {:?}", job_id, e);
+                return Err(anyhow::anyhow!("Failed to get connection for job {}: {:?}", job_id, e));
+            }
+        };
 
-        let mut storage_processor = self.prover_connection_pool.connection().await.unwrap();
         save_proof(
             job_id,
             started_at,
@@ -230,8 +225,7 @@ impl Server {
             self.prover_config.shall_save_to_public_bucket,
             &mut storage_processor,
             self.protocol_version,
-        )
-            .await;
+        ).await;
         Ok(())
     }
 
