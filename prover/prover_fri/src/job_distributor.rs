@@ -39,7 +39,7 @@ pub(crate) struct Cli {
 struct Server {
     server_addr: SocketAddr,
     max_size: u32,
-    jobs: Arc<RwLock<HashMap<u32, ProverJob>>>,
+    jobs: Arc<RwLock<HashMap<u32, (ProverJob, Instant)>>>,
     request_id: Arc<AtomicUsize>,
     setup_load_mode: SetupLoadMode,
     prover_config: FriProverConfig,
@@ -103,8 +103,7 @@ impl Server {
             max_size,
             jobs: Arc::new(RwLock::new(HashMap::new())),
             request_id: Arc::new(AtomicUsize::new(0)),
-            setup_load_mode: load_setup_data_cache(&prover_config)
-                .context("load_setup_data_cache()")?,
+            setup_load_mode: load_setup_data_cache(&prover_config).context("load_setup_data_cache()")?,
             prover_config,
             object_store,
             prover_connection_pool,
@@ -116,6 +115,7 @@ impl Server {
     }
 
     async fn register_methods(self: Arc<Self>, module: &mut RpcModule<()>) -> anyhow::Result<()> {
+
         let server = self.clone();
         module.register_async_method("get_job", move |_params, _,_| {
             let server = server.clone();
@@ -128,7 +128,8 @@ impl Server {
                 if let Some(proof_job) = proof_job_option {
                     // Insert the job in the hash table
                     let mut jobs = server.jobs.write().await;
-                    jobs.insert(_req_id, proof_job.clone());
+                    let started_job_at = Instant::now();
+                    jobs.insert(_req_id, (proof_job.clone(), started_job_at));
                     println!("Job {} with request id {} inserted.", proof_job.job_id, _req_id);
                     Ok(proof_job)
                 } else {
@@ -138,13 +139,12 @@ impl Server {
             }
         })?;
 
-        let server = self.clone();
         module.register_async_method("submit_result", move |_params, _, _| {
-            let server = server.clone();
+            let server = self.clone();
             async move {
                 let proof_artifact: ProverArtifacts = _params.one()?;
                 let mut jobs = server.jobs.write().await;
-                if let Some(job) = jobs.remove(&proof_artifact.request_id) {
+                if let Some((job, started_job_at)) = jobs.remove(&proof_artifact.request_id) {
                     println!("Received proof artifact for job {} with request id {}.", job.job_id, job.request_id);
 
                     // Clone necessary parts before moving into async block
@@ -157,11 +157,13 @@ impl Server {
                         let setup_data = get_setup_data(setup_load_mode, setup_data_key)
                             .context("get_setup_data()")
                             .unwrap();
-                        let started_at = Instant::now();
+
                         let job_id = job.job_id.clone();
+                        /*let keystore = Keystore::default();
+                        keystore.load_base_layer_verification_key();*/
                         let is_valid = verify_client_proof(proof_artifact.clone(), job, &setup_data.vk).await;
                         if is_valid {
-                            let _ = server_clone.save_proof_to_db(job_id, proof_artifact, started_at).await;
+                            let _ = server_clone.save_proof_to_db(job_id, proof_artifact, started_job_at).await;
                         }
                     });
 
