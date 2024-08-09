@@ -69,7 +69,7 @@ pub async fn save_proof(
     let proof = artifacts.proof_wrapper;
     // We save the scheduler proofs in public bucket,
     // so that it can be verified independently while we're doing shadow proving
-    let (circuit_type, is_scheduler_proof) = match &proof {
+    let (_circuit_type, is_scheduler_proof) = match &proof {
         FriProofWrapper::Base(base) => (base.numeric_circuit_type(), false),
         FriProofWrapper::Recursive(recursive_circuit) => match recursive_circuit {
             ZkSyncRecursionLayerProof::SchedulerCircuit(_) => {

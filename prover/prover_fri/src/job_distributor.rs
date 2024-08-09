@@ -56,7 +56,6 @@ impl Server {
         let prover_config = general_config.prover_config.context("fri_prover config")?;
         let database_secrets =
             load_database_secrets(opt.secrets_path).context("database secrets")?;
-        let protocol_version = PROVER_PROTOCOL_SEMANTIC_VERSION;
 
         let prover_connection_pool =
             ConnectionPool::<Prover>::singleton(database_secrets.prover_url()?)
@@ -78,7 +77,6 @@ impl Server {
             .clone()
             .context("public object store config")?;
 
-        let blob_store = store_factory.create_store().await?;
         let public_blob_store = match prover_config.shall_save_to_public_bucket {
             false => None,
             true => Some(
@@ -105,8 +103,8 @@ impl Server {
             object_store,
             prover_connection_pool,
             circuit_ids_for_round_to_be_proven,
-            protocol_version,
-            blob_store,
+            protocol_version: PROVER_PROTOCOL_SEMANTIC_VERSION,
+            blob_store: store_factory.create_store().await?,
             public_blob_store
         })
     }
@@ -143,15 +141,12 @@ impl Server {
                 let mut jobs = server.jobs.write().await;
                 if let Some((job, started_job_at)) = jobs.remove(&proof_artifact.request_id) {
                     println!("Received proof artifact for job {} with request id {}.", job.job_id, job.request_id);
-
-                    // Clone necessary parts before moving into async block
                     let server_clone = server.clone();
 
                     // Respond to the client immediately
                     tokio::spawn(async move {
                         let job_id = job.job_id.clone();
-                        let is_valid = verify_client_proof(proof_artifact.clone(), job).await;
-                        if is_valid {
+                        if verify_client_proof(proof_artifact.clone(), job).await {
                             let _ = server_clone.save_proof_to_db(job_id, proof_artifact, started_job_at).await;
                         }
                     });
