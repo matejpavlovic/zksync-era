@@ -16,7 +16,6 @@ use zksync_object_store::ObjectStore;
 use zksync_object_store::ObjectStoreFactory;
 use zksync_prover_dal::{ConnectionPool, Prover};
 use zksync_prover_fri_utils::fetch_next_circuit;
-use zksync_prover_fri_utils::get_all_circuit_id_round_tuples_for;
 use zksync_types::{
     basic_fri_types::CircuitIdRoundTuple,
     protocol_version::ProtocolSemanticVersion,
@@ -25,6 +24,7 @@ use zksync_prover_fri::cpu_prover_utils::verify_client_proof;
 use zksync_prover_fri::utils::{ProverArtifacts, save_proof};
 use zksync_prover_fri_types::{ProverJob, PROVER_PROTOCOL_SEMANTIC_VERSION};
 use zksync_config::configs::FriProverConfig;
+
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
@@ -43,7 +43,6 @@ struct Server {
     prover_config: FriProverConfig,
     object_store: Arc<dyn ObjectStore>,
     prover_connection_pool: ConnectionPool<Prover>,
-    circuit_ids_for_round_to_be_proven: Vec<CircuitIdRoundTuple>,
     protocol_version: ProtocolSemanticVersion,
     blob_store: Arc<dyn ObjectStore>,
     public_blob_store: Option<Arc<dyn ObjectStore>>,
@@ -86,14 +85,6 @@ impl Server {
             ),
         };
 
-        let circuit_ids_for_round_to_be_proven = general_config
-            .prover_group_config
-            .expect("prover_group_config")
-            .get_circuit_ids_for_group_id(prover_config.specialized_group_id)
-            .unwrap_or_default();
-        let circuit_ids_for_round_to_be_proven =
-            get_all_circuit_id_round_tuples_for(circuit_ids_for_round_to_be_proven);
-
         Ok(Self {
             server_addr,
             max_size,
@@ -102,7 +93,6 @@ impl Server {
             prover_config,
             object_store,
             prover_connection_pool,
-            circuit_ids_for_round_to_be_proven,
             protocol_version: PROVER_PROTOCOL_SEMANTIC_VERSION,
             blob_store: store_factory.create_store().await?,
             public_blob_store
@@ -115,8 +105,9 @@ impl Server {
         module.register_async_method("get_job", move |_params, _,_| {
             let server = server.clone();
             async move {
+                let circuit_ids_for_round_to_be_proven: Vec<CircuitIdRoundTuple> = _params.one()?;
                 let _req_id = server.request_id.fetch_add(1, Ordering::SeqCst) as u32;
-                let proof_job_option = server.get_next_job(_req_id)
+                let proof_job_option = server.get_next_job(_req_id, circuit_ids_for_round_to_be_proven)
                     .await
                     .map_err(|_e| ErrorObject::from(ErrorCode::InternalError))?;
 
@@ -163,12 +154,12 @@ impl Server {
         Ok(())
     }
 
-    async fn get_next_job(&self, _req_id: u32) -> anyhow::Result<Option<ProverJob>> {
+    async fn get_next_job(&self, _req_id: u32, circuit_ids_for_round_to_be_proven: Vec<CircuitIdRoundTuple>) -> anyhow::Result<Option<ProverJob>> {
         let mut storage = self.prover_connection_pool.connection().await.unwrap();
         let Some(job) = fetch_next_circuit(
             &mut storage,
             &*self.object_store,
-            &self.circuit_ids_for_round_to_be_proven,
+            &circuit_ids_for_round_to_be_proven,
             &self.protocol_version,
             _req_id,
         )

@@ -5,7 +5,10 @@ use jsonrpsee::rpc_params;
 use tokio;
 use zksync_prover_fri::cpu_prover_utils::Prover;
 use zksync_prover_fri_types::ProverJob;
-
+use zksync_types::basic_fri_types::CircuitIdRoundTuple;
+use zksync_prover_fri_utils::get_all_circuit_id_round_tuples_for;
+use zksync_core_leftovers::temp_config_store::load_general_config;
+use anyhow::Context as _;
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
@@ -29,7 +32,18 @@ impl Client {
             .max_request_size(max_size)
             .max_response_size(max_size)
             .build(server_url)?;
-        let client_prover = Prover::new(Cli::parse().config_path).unwrap();
+
+        let general_config = load_general_config(Cli::parse().config_path.clone()).context("general config")?;
+        let prover_config = general_config.prover_config.context("fri_prover config")?;
+        let circuit_ids_for_round_to_be_proven = general_config
+            .prover_group_config
+            .expect("prover_group_config")
+            .get_circuit_ids_for_group_id(prover_config.specialized_group_id)
+            .unwrap_or_default();
+        let circuit_ids_for_round_to_be_proven =
+            get_all_circuit_id_round_tuples_for(circuit_ids_for_round_to_be_proven);
+        //let circuit_ids_for_round_to_be_proven = vec![CircuitIdRoundTuple::new(4, 0)];
+        let client_prover = Prover::new(prover_config, circuit_ids_for_round_to_be_proven).unwrap();
         Ok(Self {
             client,
             client_prover,
@@ -38,7 +52,8 @@ impl Client {
 
     pub async fn poll_for_job(&self) -> anyhow::Result<()> {
         // Request a job
-        let response: Result<ProverJob, _> = self.client.request("get_job", rpc_params![]).await;
+        let circuit_ids_json = serde_json::to_value(self.client_prover.circuit_ids_for_round_to_be_proven.clone())?;
+        let response: Result<ProverJob, _> = self.client.request("get_job", rpc_params![circuit_ids_json]).await;
 
         match response {
             Ok(job) => {
@@ -59,7 +74,7 @@ impl Client {
                     Err(e) => eprintln!("Failed to submit proof: {}.", e),
                 }
             }
-            Err(e) => eprintln!("Error: {}.", e),
+            Err(e) => eprintln!("No desired job is available: {}.", e),
         }
         Ok(())
     }
