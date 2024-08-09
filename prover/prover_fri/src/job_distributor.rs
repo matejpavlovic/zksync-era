@@ -15,16 +15,15 @@ use zksync_env_config::object_store::ProverObjectStoreConfig;
 use zksync_object_store::ObjectStore;
 use zksync_object_store::ObjectStoreFactory;
 use zksync_prover_dal::{ConnectionPool, Prover};
-use zksync_prover_fri_types::PROVER_PROTOCOL_SEMANTIC_VERSION;
 use zksync_prover_fri_utils::fetch_next_circuit;
 use zksync_prover_fri_utils::get_all_circuit_id_round_tuples_for;
 use zksync_types::{
     basic_fri_types::CircuitIdRoundTuple,
     protocol_version::ProtocolSemanticVersion,
 };
-use zksync_prover_fri::cpu_prover_utils::{get_setup_data, load_setup_data_cache, SetupLoadMode, verify_client_proof};
+use zksync_prover_fri::cpu_prover_utils::verify_client_proof;
 use zksync_prover_fri::utils::{ProverArtifacts, save_proof};
-use zksync_prover_fri_types::ProverJob;
+use zksync_prover_fri_types::{ProverJob, PROVER_PROTOCOL_SEMANTIC_VERSION};
 use zksync_config::configs::FriProverConfig;
 
 #[derive(Debug, Parser)]
@@ -41,7 +40,6 @@ struct Server {
     max_size: u32,
     jobs: Arc<RwLock<HashMap<u32, (ProverJob, Instant)>>>,
     request_id: Arc<AtomicUsize>,
-    setup_load_mode: SetupLoadMode,
     prover_config: FriProverConfig,
     object_store: Arc<dyn ObjectStore>,
     prover_connection_pool: ConnectionPool<Prover>,
@@ -103,7 +101,6 @@ impl Server {
             max_size,
             jobs: Arc::new(RwLock::new(HashMap::new())),
             request_id: Arc::new(AtomicUsize::new(0)),
-            setup_load_mode: load_setup_data_cache(&prover_config).context("load_setup_data_cache()")?,
             prover_config,
             object_store,
             prover_connection_pool,
@@ -148,20 +145,12 @@ impl Server {
                     println!("Received proof artifact for job {} with request id {}.", job.job_id, job.request_id);
 
                     // Clone necessary parts before moving into async block
-                    let setup_load_mode = server.setup_load_mode.clone();
-                    let setup_data_key = job.setup_data_key.clone();
                     let server_clone = server.clone();
 
                     // Respond to the client immediately
                     tokio::spawn(async move {
-                        let setup_data = get_setup_data(setup_load_mode, setup_data_key)
-                            .context("get_setup_data()")
-                            .unwrap();
-
                         let job_id = job.job_id.clone();
-                        /*let keystore = Keystore::default();
-                        keystore.load_base_layer_verification_key();*/
-                        let is_valid = verify_client_proof(proof_artifact.clone(), job, &setup_data.vk).await;
+                        let is_valid = verify_client_proof(proof_artifact.clone(), job).await;
                         if is_valid {
                             let _ = server_clone.save_proof_to_db(job_id, proof_artifact, started_job_at).await;
                         }

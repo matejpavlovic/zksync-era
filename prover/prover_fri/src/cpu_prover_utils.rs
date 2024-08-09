@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::Arc, time::Instant};
 use anyhow::Context as _;
-use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
 use zkevm_test_harness::prover_utils::{prove_base_layer_circuit, prove_recursion_layer_circuit};
 use zksync_config::configs::{fri_prover_group::FriProverGroupConfig, FriProverConfig};
 use zksync_env_config::FromEnv;
@@ -15,7 +14,7 @@ use zksync_prover_fri_types::{circuit_definitions::{
 }, CircuitWrapper, FriProofWrapper, ProverJob, ProverServiceDataKey};
 use zksync_vk_setup_data_server_fri::{keystore::Keystore, GoldilocksProverSetupData};
 use zksync_core_leftovers::temp_config_store::load_general_config;
-use crate::utils::{setup_metadata_to_setup_data_key, get_setup_data_key, verify_proof, ProverArtifacts, F, H};
+use crate::utils::{setup_metadata_to_setup_data_key, get_setup_data_key, verify_proof, ProverArtifacts};
 
 #[derive(Clone)]
 pub enum SetupLoadMode {
@@ -120,13 +119,23 @@ impl Prover {
 
 }
 
-pub async fn verify_client_proof(proof_artifact: ProverArtifacts, job: ProverJob, vk: &VerificationKey<F, H>) -> bool {
+pub async fn verify_client_proof(proof_artifact: ProverArtifacts, job: ProverJob) -> bool {
     let is_valid = match (proof_artifact.proof_wrapper.clone(), job.circuit_wrapper) {
         (FriProofWrapper::Base(proof), CircuitWrapper::Base(base_circuit)) => {
-            verify_proof(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
+            // Try to load the base layer verification key
+            let v_k = match Keystore::default().load_base_layer_verification_key(job.setup_data_key.circuit_id) {
+                Ok(vk) => vk.into_inner(), // Extract the verification key
+                Err(_) => return false, // Return false if an error occurs
+            };
+            verify_proof(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), &v_k, job.job_id, proof_artifact.request_id.clone())
         }
         (FriProofWrapper::Recursive(proof), CircuitWrapper::Recursive(recursive_circuit)) => {
-            verify_proof(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), vk, job.job_id, proof_artifact.request_id.clone())
+            // Try to load the recursive layer verification key
+            let v_k = match Keystore::default().load_recursive_layer_verification_key(job.setup_data_key.circuit_id) {
+                Ok(vk) => vk.into_inner(), // Extract the verification key
+                Err(_) => return false, // Return false if an error occurs
+            };
+            verify_proof(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), &v_k, job.job_id, proof_artifact.request_id.clone())
         }
         _ => false, // Handle the mismatched case by returning false
     };
