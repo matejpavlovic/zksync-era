@@ -25,6 +25,11 @@ use zksync_prover_fri::utils::{ProverArtifacts, save_proof};
 use zksync_prover_fri_types::{ProverJob, PROVER_PROTOCOL_SEMANTIC_VERSION};
 use zksync_config::configs::FriProverConfig;
 
+const NO_JOB_AVAILABLE_ERROR_CODE: i32 = 1001;
+const NO_JOB_AVAILABLE_ERROR_MESSAGE: &str = "No job is currently available.";
+
+const NO_JOB_REQUEST_ERROR_CODE: i32 = 1002;
+const NO_JOB_REQUEST_ERROR_MESSAGE: &str = "There is no current job with your request id";
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
@@ -120,7 +125,12 @@ impl Server {
                     Ok(proof_job)
                 } else {
                     println!("No job is available.");
-                    Err(ErrorObject::from(ErrorCode::InternalError))
+                    let error = ErrorObject::owned(
+                        NO_JOB_AVAILABLE_ERROR_CODE,
+                        NO_JOB_AVAILABLE_ERROR_MESSAGE,
+                        None::<()>,
+                    );
+                    Err(error)
                 }
             }
         })?;
@@ -141,12 +151,16 @@ impl Server {
                             let _ = server_clone.save_proof_to_db(job_id, proof_artifact, started_job_at).await;
                         }
                     });
-
                     // Respond with success
                     Ok(())
                 } else {
                     println!("There is no current job with request id {}.", proof_artifact.request_id);
-                    Err(ErrorObject::from(ErrorCode::InternalError))
+                    let error = ErrorObject::owned(
+                        NO_JOB_REQUEST_ERROR_CODE,
+                        NO_JOB_REQUEST_ERROR_MESSAGE,
+                        Some("Request id = ".to_string() + &proof_artifact.request_id.to_string()),
+                    );
+                    Err(error)
                 }
             }
         })?;

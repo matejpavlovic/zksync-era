@@ -5,7 +5,7 @@ use jsonrpsee::rpc_params;
 use tokio;
 use zksync_prover_fri::cpu_prover_utils::Prover;
 use zksync_prover_fri_types::ProverJob;
-use zksync_types::basic_fri_types::CircuitIdRoundTuple;
+//use zksync_types::basic_fri_types::CircuitIdRoundTuple;
 use zksync_prover_fri_utils::get_all_circuit_id_round_tuples_for;
 use zksync_core_leftovers::temp_config_store::load_general_config;
 use anyhow::Context as _;
@@ -74,7 +74,7 @@ impl Client {
                     Err(e) => eprintln!("Failed to submit proof: {}.", e),
                 }
             }
-            Err(e) => eprintln!("No desired job is available: {}.", e),
+            Err(e) => eprintln!("{}", e)
         }
         Ok(())
     }
