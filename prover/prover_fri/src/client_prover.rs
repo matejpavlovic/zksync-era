@@ -10,6 +10,7 @@ use zksync_prover_fri_utils::get_all_circuit_id_round_tuples_for;
 use zksync_core_leftovers::temp_config_store::load_general_config;
 use anyhow::Context as _;
 
+
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
 pub(crate) struct Cli {

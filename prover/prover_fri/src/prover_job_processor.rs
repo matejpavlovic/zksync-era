@@ -3,8 +3,7 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 use anyhow::Context as _;
 use tokio::task::JoinHandle;
 use zkevm_test_harness::prover_utils::{prove_base_layer_circuit, prove_recursion_layer_circuit};
-use zksync_config::configs::{fri_prover_group::FriProverGroupConfig, FriProverConfig};
-use zksync_env_config::FromEnv;
+use zksync_config::configs::FriProverConfig;
 use zksync_object_store::ObjectStore;
 use zksync_prover_dal::{ConnectionPool, ProverDal};
 use zksync_prover_fri_types::{
@@ -29,7 +28,7 @@ use zksync_vk_setup_data_server_fri::{keystore::Keystore, GoldilocksProverSetupD
 use crate::{
     metrics::{CircuitLabels, Layer, METRICS},
     utils::{
-        get_setup_data_key, save_proof, setup_metadata_to_setup_data_key, verify_proof,
+        get_setup_data_key, save_proof, verify_proof,
         ProverArtifacts,
     },
 };
@@ -276,38 +275,4 @@ impl JobProcessor for Prover {
             .map(|attempts| attempts.unwrap_or(0))
             .context("failed to get job attempts for Prover")
     }
-}
-
-#[allow(dead_code)]
-pub fn load_setup_data_cache(config: &FriProverConfig) -> anyhow::Result<SetupLoadMode> {
-    Ok(match config.setup_load_mode {
-        zksync_config::configs::fri_prover::SetupLoadMode::FromDisk => SetupLoadMode::FromDisk,
-        zksync_config::configs::fri_prover::SetupLoadMode::FromMemory => {
-            let mut cache = HashMap::new();
-            tracing::info!(
-                "Loading setup data cache for group {}",
-                &config.specialized_group_id
-            );
-            let prover_setup_metadata_list = FriProverGroupConfig::from_env()
-                .context("FriProverGroupConfig::from_env()")?
-                .get_circuit_ids_for_group_id(config.specialized_group_id)
-                .expect(
-                    "At least one circuit should be configured for group when running in FromMemory mode",
-                );
-            tracing::info!(
-                "for group {} configured setup metadata are {:?}",
-                &config.specialized_group_id,
-                prover_setup_metadata_list
-            );
-            let keystore = Keystore::default();
-            for prover_setup_metadata in prover_setup_metadata_list {
-                let key = setup_metadata_to_setup_data_key(&prover_setup_metadata);
-                let setup_data = keystore
-                    .load_cpu_setup_data_for_circuit_type(key.clone())
-                    .context("get_cpu_setup_data_for_circuit_type()")?;
-                cache.insert(key, Arc::new(setup_data));
-            }
-            SetupLoadMode::FromMemory(cache)
-        }
-    })
 }

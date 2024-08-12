@@ -1,8 +1,7 @@
-use std::{collections::HashMap, sync::Arc, time::Instant};
+use std::{sync::Arc, time::Instant};
 use anyhow::Context as _;
 use zkevm_test_harness::prover_utils::{prove_base_layer_circuit, prove_recursion_layer_circuit};
-use zksync_config::configs::{fri_prover_group::FriProverGroupConfig, FriProverConfig};
-use zksync_env_config::FromEnv;
+use zksync_config::configs::FriProverConfig;
 use zksync_prover_fri_types::{circuit_definitions::{
     base_layer_proof_config,
     boojum::{cs::implementations::pow::NoPow, worker::Worker},
@@ -13,14 +12,20 @@ use zksync_prover_fri_types::{circuit_definitions::{
     recursion_layer_proof_config,
 }, CircuitWrapper, FriProofWrapper, ProverJob, ProverServiceDataKey};
 use zksync_vk_setup_data_server_fri::{keystore::Keystore, GoldilocksProverSetupData};
-use crate::utils::{setup_metadata_to_setup_data_key, get_setup_data_key, verify_proof, ProverArtifacts};
+use crate::utils::{get_setup_data_key, verify_proof, ProverArtifacts, save_proof, load_setup_data_cache, SetupLoadMode};
 use zksync_types::basic_fri_types::CircuitIdRoundTuple;
+use zksync_prover_fri_utils::fetch_next_circuit;
+use zksync_prover_fri_types::{PROVER_PROTOCOL_SEMANTIC_VERSION};
+use zksync_object_store::ObjectStoreFactory;
+use zksync_object_store::ObjectStore;
+use zksync_prover_dal::{ConnectionPool};
+use zksync_types::{
+    protocol_version::ProtocolSemanticVersion,
+};
+use zksync_core_leftovers::temp_config_store::{load_database_secrets, load_general_config};
+use zksync_env_config::object_store::ProverObjectStoreConfig;
+use zksync_prover_dal::Prover as ProverDal;
 
-#[derive(Clone)]
-pub enum SetupLoadMode {
-    FromMemory(HashMap<ProverServiceDataKey, Arc<GoldilocksProverSetupData>>),
-    FromDisk,
-}
 
 pub struct Prover {
     pub config: Arc<FriProverConfig>,
@@ -114,64 +119,132 @@ impl Prover {
         verify_proof(&CircuitWrapper::Base(circuit), &proof, &artifact.vk, job_id, request_id);
         FriProofWrapper::Base(ZkSyncBaseLayerProof::from_inner(circuit_id, proof))
     }
-
 }
 
-pub async fn verify_client_proof(proof_artifact: ProverArtifacts, job: ProverJob) -> bool {
-    let is_valid = match (proof_artifact.proof_wrapper.clone(), job.circuit_wrapper) {
-        (FriProofWrapper::Base(proof), CircuitWrapper::Base(base_circuit)) => {
-            // Try to load the base layer verification key
-            let v_k = match Keystore::default().load_base_layer_verification_key(job.setup_data_key.circuit_id) {
-                Ok(vk) => vk.into_inner(), // Extract the verification key
-                Err(_) => return false, // Return false if an error occurs
-            };
-            verify_proof(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), &v_k, job.job_id, proof_artifact.request_id.clone())
-        }
-        (FriProofWrapper::Recursive(proof), CircuitWrapper::Recursive(recursive_circuit)) => {
-            // Try to load the recursive layer verification key
-            let v_k = match Keystore::default().load_recursive_layer_verification_key(job.setup_data_key.circuit_id) {
-                Ok(vk) => vk.into_inner(), // Extract the verification key
-                Err(_) => return false, // Return false if an error occurs
-            };
-            verify_proof(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), &v_k, job.job_id, proof_artifact.request_id.clone())
-        }
-        _ => false, // Handle the mismatched case by returning false
-    };
-    is_valid
+
+pub struct JobDistributor {
+    pub prover_config: FriProverConfig,
+    pub object_store: Arc<dyn ObjectStore>,
+    pub prover_connection_pool: ConnectionPool<ProverDal>,
+    pub protocol_version: ProtocolSemanticVersion,
+    pub blob_store: Arc<dyn ObjectStore>,
+    pub public_blob_store: Option<Arc<dyn ObjectStore>>,
 }
 
-#[allow(dead_code)]
-pub fn load_setup_data_cache(config: &FriProverConfig) -> anyhow::Result<SetupLoadMode> {
-    Ok(match config.setup_load_mode {
-        zksync_config::configs::fri_prover::SetupLoadMode::FromDisk => SetupLoadMode::FromDisk,
-        zksync_config::configs::fri_prover::SetupLoadMode::FromMemory => {
-            let mut cache = HashMap::new();
-            tracing::info!(
-        "Loading setup data cache for group {}",
-        &config.specialized_group_id
-    );
-            let prover_setup_metadata_list = FriProverGroupConfig::from_env()
-                .context("FriProverGroupConfig::from_env()")?
-                .get_circuit_ids_for_group_id(config.specialized_group_id)
-                .expect(
-                    "At least one circuit should be configured for group when running in FromMemory mode",
-                );
-            tracing::info!(
-        "for group {} configured setup metadata are {:?}",
-        &config.specialized_group_id,
-        prover_setup_metadata_list
-    );
-            let keystore = Keystore::default();
-            for prover_setup_metadata in prover_setup_metadata_list {
-                let key = setup_metadata_to_setup_data_key(&prover_setup_metadata);
-                let setup_data = keystore
-                    .load_cpu_setup_data_for_circuit_type(key.clone())
-                    .context("get_cpu_setup_data_for_circuit_type()")?;
-                cache.insert(key, Arc::new(setup_data));
+impl JobDistributor {
+    pub async fn new(config_path: Option<std::path::PathBuf>, secrets_path: Option<std::path::PathBuf>) -> anyhow::Result<Self> {
+        let general_config = load_general_config(config_path).context("general config")?;
+        let prover_config = general_config.prover_config.context("fri_prover config")?;
+        let database_secrets =
+            load_database_secrets(secrets_path).context("database secrets")?;
+
+        let prover_connection_pool =
+            ConnectionPool::<ProverDal>::singleton(database_secrets.prover_url()?)
+                .build()
+                .await
+                .context("failed to build a prover_connection_pool")?;
+        let object_store_config = ProverObjectStoreConfig(
+            prover_config
+                .clone()
+                .prover_object_store
+                .context("object store")?,
+        );
+        let object_store = ObjectStoreFactory::new(object_store_config.0.clone())
+            .create_store()
+            .await?;
+        let store_factory = ObjectStoreFactory::new(object_store_config.0);
+        let public_object_store_config = prover_config
+            .public_object_store
+            .clone()
+            .context("public object store config")?;
+
+        let public_blob_store = match prover_config.shall_save_to_public_bucket {
+            false => None,
+            true => Some(
+                ObjectStoreFactory::new(public_object_store_config)
+                    .create_store()
+                    .await?,
+            ),
+        };
+
+        Ok(JobDistributor {
+            prover_config,
+            object_store,
+            prover_connection_pool,
+            protocol_version: PROVER_PROTOCOL_SEMANTIC_VERSION,
+            blob_store: store_factory.create_store().await?,
+            public_blob_store
+        })
+    }
+
+    pub async fn verify_client_proof(proof_artifact: ProverArtifacts, job: ProverJob) -> bool {
+        let is_valid = match (proof_artifact.proof_wrapper.clone(), job.circuit_wrapper) {
+            (FriProofWrapper::Base(proof), CircuitWrapper::Base(base_circuit)) => {
+                // Try to load the base layer verification key
+                let v_k = match Keystore::default().load_base_layer_verification_key(job.setup_data_key.circuit_id) {
+                    Ok(vk) => vk.into_inner(), // Extract the verification key
+                    Err(_) => return false, // Return false if an error occurs
+                };
+                verify_proof(&CircuitWrapper::Base(base_circuit), &proof.into_inner(), &v_k, job.job_id, proof_artifact.request_id.clone())
             }
-            SetupLoadMode::FromMemory(cache)
-        }
-    })
+            (FriProofWrapper::Recursive(proof), CircuitWrapper::Recursive(recursive_circuit)) => {
+                // Try to load the recursive layer verification key
+                let v_k = match Keystore::default().load_recursive_layer_verification_key(job.setup_data_key.circuit_id) {
+                    Ok(vk) => vk.into_inner(), // Extract the verification key
+                    Err(_) => return false, // Return false if an error occurs
+                };
+                verify_proof(&CircuitWrapper::Recursive(recursive_circuit), &proof.into_inner(), &v_k, job.job_id, proof_artifact.request_id.clone())
+            }
+            _ => false, // Handle the mismatched case by returning false
+        };
+        is_valid
+    }
+
+    pub async fn get_next_job(&self, _req_id: u32, circuit_ids_for_round_to_be_proven: Vec<CircuitIdRoundTuple>) -> anyhow::Result<Option<ProverJob>> {
+        let mut storage = self.prover_connection_pool.connection().await.unwrap();
+        let Some(job) = fetch_next_circuit(
+            &mut storage,
+            &*self.object_store,
+            &circuit_ids_for_round_to_be_proven,
+            &self.protocol_version,
+            _req_id,
+        )
+            .await
+        else {
+            return Ok(None);
+        };
+        Ok(Some(job))
+    }
+
+    pub async fn save_proof_to_db(
+        &self,
+        job_id: u32,
+        artifacts: ProverArtifacts,
+        started_at: Instant,
+    ) -> anyhow::Result<()> {
+        // Error handling when getting connection
+        let mut storage_processor = match self.prover_connection_pool.connection().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                println!("Failed to get connection for job {}: {:?}", job_id, e);
+                return Err(anyhow::anyhow!("Failed to get connection for job {}: {:?}", job_id, e));
+            }
+        };
+
+        save_proof(
+            job_id,
+            started_at,
+            artifacts,
+            &*self.blob_store,
+            self.public_blob_store.as_deref(),
+            self.prover_config.shall_save_to_public_bucket,
+            &mut storage_processor,
+            self.protocol_version,
+        ).await;
+        println!("Wrote to DB that job {} has been successfully completed.", job_id);
+        Ok(())
+    }
+
 }
 
 pub fn get_setup_data(
