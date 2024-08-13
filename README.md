@@ -41,7 +41,7 @@ Once everything is set up, run the prover with the following command:
 ```bash
 cd prover
 chmod +x run_prover.sh
-./run_prover.sh --server-url http://34.29.79.81:3030"
+./run_prover.sh --server-url http://34.29.79.81:3030
 ```
 > **Note**: On Mac, the prover may crash unexpectedly. If it does, the script will automatically relaunch the prover.
 
