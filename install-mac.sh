@@ -4,7 +4,7 @@
 set -e
 
 # Remember local directory as the root of community proving
-CP_DIR=$(pwd)
+ZKSYNC_HOME=$(pwd)
 
 # Install Homebrew
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -32,9 +32,9 @@ npm install -g yarn
 yarn set version 1.22.19
 
 # Set the zksync environment variables
-echo "export ZKSYNC_HOME=\"$CP_DIR/zksync-era\"" >> $HOME/.zprofile
+echo "export ZKSYNC_HOME=\"$ZKSYNC_HOME\"" >> $HOME/.zprofile
 echo 'export PATH="$ZKSYNC_HOME/bin:$PATH"' >> $HOME/.zprofile
-export ZKSYNC_HOME="$CP_DIR/zksync-era"
+export ZKSYNC_HOME="$ZKSYNC_HOME"
 export PATH="$ZKSYNC_HOME/bin:$PATH"
 
 # Init ZKsync Era

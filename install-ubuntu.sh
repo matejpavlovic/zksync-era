@@ -3,7 +3,7 @@
 set -e # Exit immediately if any of the below commands fails
 
 # Remember local directory as the root of community proving
-CP_DIR=$(pwd)
+ZKSYNC_HOME=$(pwd)
 
 # Install all necessary packages
 sudo apt update -y
@@ -37,9 +37,9 @@ npm install -g yarn
 yarn set version 1.22.19
 
 # Set zksync variables
-echo "export ZKSYNC_HOME=\"$CP_DIR/zksync-era\"" >> $HOME/.bashrc
+echo "export ZKSYNC_HOME=\"$ZKSYNC_HOME\"" >> $HOME/.bashrc
 echo 'export PATH="$ZKSYNC_HOME/bin:$PATH"' >> $HOME/.bashrc
-export ZKSYNC_HOME="$CP_DIR/zksync-era"
+export ZKSYNC_HOME="$ZKSYNC_HOME"
 export PATH="$ZKSYNC_HOME/bin:$PATH"
 
 # Init ZKsync Era
