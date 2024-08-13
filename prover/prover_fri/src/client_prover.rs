@@ -8,6 +8,8 @@ use zksync_prover_fri_types::ProverJob;
 use zksync_types::basic_fri_types::CircuitIdRoundTuple;
 use zksync_core_leftovers::temp_config_store::load_general_config;
 use anyhow::Context as _;
+use zksync_prover_fri_utils::get_all_circuit_id_round_tuples_for;
+
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
@@ -37,15 +39,17 @@ impl Client {
         let general_config = load_general_config(Cli::parse().config_path.clone()).context("general config")?;
         let prover_config = general_config.prover_config.context("fri_prover config")?;
 
-        // Parse the circuit_ids_rounds string into a Vec<CircuitIdRoundTuple>
-        let circuit_ids_for_round_to_be_proven: Vec<CircuitIdRoundTuple> = parse_circuit_ids_rounds(&circuit_ids_rounds)?;
-        /*let circuit_ids_for_round_to_be_proven = general_config
-            .prover_group_config
-            .expect("prover_group_config")
-            .get_circuit_ids_for_group_id(prover_config.specialized_group_id)
-            .unwrap_or_default();
-        let circuit_ids_for_round_to_be_proven =
-            get_all_circuit_id_round_tuples_for(circuit_ids_for_round_to_be_proven);*/
+        // Determine how to set circuit_ids_for_round_to_be_proven based on the input
+        let circuit_ids_for_round_to_be_proven = if circuit_ids_rounds == "all" {
+            let circuit_ids = general_config
+                .prover_group_config
+                .expect("prover_group_config")
+                .get_circuit_ids_for_group_id(prover_config.specialized_group_id)
+                .unwrap_or_default();
+            get_all_circuit_id_round_tuples_for(circuit_ids)
+        } else {
+            parse_circuit_ids_rounds(&circuit_ids_rounds)?
+        };
 
         let client_prover = Prover::new(prover_config, circuit_ids_for_round_to_be_proven).unwrap();
         Ok(Self {
