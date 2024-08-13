@@ -47,12 +47,9 @@ while true; do
     zk f cargo run --release --bin client -- --server-url "$SERVER_URL" --circuit-ids-rounds "$CIRCUIT_IDS"
   fi
 
-  # Check if the command succeeded, otherwise break the loop
+  # Check if the command succeeded
   if [ $? -ne 0 ]; then
-    echo "Prover failed. Exiting loop."
-    break
+    echo "Prover failed. Retrying ..."
   fi
 
-  # Sleep for a short duration before the next iteration (you can adjust the sleep time as needed)
-  #sleep 5
 done

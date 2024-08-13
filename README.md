@@ -1,71 +1,55 @@
 # Community Proving with Zksync-Era
 
-# 1. Install all required components and configurations
+## Introduction
+This project allows users to perform community proving using Zksync-Era. Follow the steps below to set up the necessary environment and run the prover.
 
-# Clone repository, under community-proving branch
+## Prerequisites
+- Ubuntu 20.04+ or MacOS
+- Bash shell
+- wget or curl
+
+## 1. Install Required Components
+For Ubuntu users:
 ```bash
-git clone -b community-proving https://github.com/johnstephan/zksync-era.git
+chmod +x install-ubuntu.sh
+./install-ubuntu.sh
 ```
 
-# Set up Rust environment
+For Mac users:
 ```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh && \
-. "$HOME/.cargo/env"
+chmod +x install-mac.sh
+./install-mac.sh
 ```
+> **Note**: These scripts require some manual interactions. If any issues arise, refer to the step-by-step guides [here](./setup_instructions_mac.md) for Mac and [here](./setup_instructions_ubuntu.md) for Ubuntu.
 
-# Install NVM and Reload current shell
+## 2. Download Proving and Verification Keys
+Before running the prover, download the necessary proving and verification keys:
+
+Example for Circuit ID 1, Round 0:
 ```bash
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
-. ~/.bashrc
+wget http://34.29.79.81:8000/setup_basic_1_data.bin
+wget http://34.29.79.81:8000/verification_basic_1_key.json
 ```
-
-# Install necessary packages
+Or using curl:
 ```bash
-sudo apt update -yqq && \
-sudo apt-get install -yqq build-essential pkg-config clang lldb lld libssl-dev
+curl -O http://34.29.79.81:8000/setup_basic_1_data.bin
+curl -O http://34.29.79.81:8000/verification_basic_1_key.json
 ```
+Place these files in the following directory: `zksync-era/prover/vk_setup_data_generator_server_fri/data`.
 
-# Install cmake 3.24.2
+## 3. Run the Prover
+Once everything is set up, run the prover with the following command:
 ```bash
-sudo apt-get install -yqq build-essential libssl-dev checkinstall zlib1g-dev libssl-dev && \
-wget https://github.com/Kitware/CMake/releases/download/v3.24.2/cmake-3.24.2.tar.gz && \
-tar -xzvf cmake-3.24.2.tar.gz && \
-cd cmake-3.24.2/ && \
-./bootstrap && \
-make && \
-sudo make install && \
-cd ../ && \
-echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bashrc && \
-. ~/.bashrc
+cd prover
+chmod +x run_prover.sh
+./run_prover.sh --server-url http://34.29.79.81:3030 --circuit-ids "(1,0),(2,1)"
 ```
+> **Note**: On Mac, the prover may crash unexpectedly. If it does, the script will automatically relaunch the prover.
 
-# Install Node & yarn
-```bash
-nvm install 18 && npm install -g yarn && yarn set version 1.22.19
-```
+## Additional Resources
+- [Setup Instructions for Mac](./setup_instructions_mac.md)
+- [Setup Instructions for Ubuntu](./setup_instructions_ubuntu.md)
 
-# Set zksync variables
-```bash
-echo 'export ZKSYNC_HOME="$HOME/zksync-era"' >> .bashrc && \
-echo 'export PATH="$ZKSYNC_HOME/bin:$PATH"' >> .bashrc
-```
-
-# At this point, we need to reboot
-```bash
-sudo reboot
-```
-
-# 2. Run the prover
-
-# Set up and compile all prover components
-# This will take close to an hour
-```bash
-cd zksync-era/prover
-./setup.sh
-```
-
-# Now, everything is ready to run the prover/client
-# Don't forget to input the appropriate IP address of the server below
-```bash
-zk f cargo run --release --bin client -- --server-url http://34.91.181.4:3030
-```
+## Contact
+If you encounter any issues or have questions, please [contact us](#) or open an issue on GitHub.
+If you have any questions, feel free to reach out via email at [jst@matterlabs.dev](mailto:jst@matterlabs.dev).
