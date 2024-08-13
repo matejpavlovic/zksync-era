@@ -25,7 +25,6 @@ chmod +x install-mac.sh
 ## 2. Download Proving and Verification Keys
 Before running the prover, download the necessary proving and verification keys:
 
-Example for Circuit ID 1, Round 0:
 ```bash
 wget http://34.29.79.81:8000/setup_basic_1_data.bin
 wget http://34.29.79.81:8000/verification_basic_1_key.json
@@ -42,7 +41,7 @@ Once everything is set up, run the prover with the following command:
 ```bash
 cd prover
 chmod +x run_prover.sh
-./run_prover.sh --server-url http://34.29.79.81:3030 --circuit-ids "(1,0),(2,1)"
+./run_prover.sh --server-url http://34.29.79.81:3030"
 ```
 > **Note**: On Mac, the prover may crash unexpectedly. If it does, the script will automatically relaunch the prover.
 
