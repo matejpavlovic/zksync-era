@@ -51,5 +51,4 @@ chmod +x run_prover.sh
 - [Setup Instructions for Ubuntu](./setup_instructions_ubuntu.md)
 
 ## Contact
-If you encounter any issues or have questions, please [contact us](#) or open an issue on GitHub.
-If you have any questions, feel free to reach out via email at [jst@matterlabs.dev](mailto:jst@matterlabs.dev).
+If you have any questions, feel free to reach out via email at [jst@matterlabs.dev](mailto:jst@matterlabs.dev), or open an issue on GitHub.
