@@ -31,12 +31,6 @@ nvm install 18
 npm install -g yarn
 yarn set version 1.22.19
 
-# Clone repository and checkout community proving branch
-git clone https://github.com/johnstephan/zksync-era.git
-cd zksync-era
-git checkout community-proving
-cd ..
-
 # Set the zksync environment variables
 echo "export ZKSYNC_HOME=\"$CP_DIR/zksync-era\"" >> $HOME/.zprofile
 echo 'export PATH="$ZKSYNC_HOME/bin:$PATH"' >> $HOME/.zprofile
@@ -44,5 +38,4 @@ export ZKSYNC_HOME="$CP_DIR/zksync-era"
 export PATH="$ZKSYNC_HOME/bin:$PATH"
 
 # Init ZKsync Era
-cd zksync-era
 zk

@@ -9,14 +9,6 @@ CP_DIR=$(pwd)
 sudo apt update -y
 sudo apt install -y build-essential pkg-config clang lldb lld libssl-dev postgresql checkinstall zlib1g-dev
 
-# Clone repository
-git clone https://github.com/johnstephan/zksync-era.git
-
-# Checkout branch
-cd zksync-era
-git checkout community-proving
-cd ..
-
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
@@ -51,5 +43,4 @@ export ZKSYNC_HOME="$CP_DIR/zksync-era"
 export PATH="$ZKSYNC_HOME/bin:$PATH"
 
 # Init ZKsync Era
-cd zksync-era
 zk
