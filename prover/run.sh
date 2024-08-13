@@ -37,19 +37,19 @@ if [ -z "$SERVER_URL" ]; then
   exit 1
 fi
 
-# Set the default circuit-ids if not provided
-if [ -z "$CIRCUIT_IDS" ]; then
-  CIRCUIT_IDS="(1,0)"
-fi
-
-# Loop to run the zk command
+# Loop to run the prover
 while true; do
-  echo "Running zk command with server-url: $SERVER_URL and circuit-ids: $CIRCUIT_IDS"
-  zk f cargo run --release --bin client -- --server-url "$SERVER_URL" --circuit-ids-rounds "$CIRCUIT_IDS"
+  if [ -z "$CIRCUIT_IDS" ]; then
+    echo "Running prover with server-url: $SERVER_URL"
+    zk f cargo run --release --bin client -- --server-url "$SERVER_URL"
+  else
+    echo "Running prover with server-url: $SERVER_URL and circuit-ids: $CIRCUIT_IDS"
+    zk f cargo run --release --bin client -- --server-url "$SERVER_URL" --circuit-ids-rounds "$CIRCUIT_IDS"
+  fi
 
   # Check if the command succeeded, otherwise break the loop
   if [ $? -ne 0 ]; then
-    echo "zk command failed. Exiting loop."
+    echo "Prover failed. Exiting loop."
     break
   fi
 
