@@ -5,8 +5,11 @@ This project allows users to perform community proving using Zksync-Era. Follow 
 
 ## Prerequisites
 - Ubuntu 20.04+ or MacOS
+- 32 GB RAM (or at least 16 GB with a lot of swap space).
 - Bash shell
 - wget or curl
+
+> **Note**: MacOS usually provides sufficient swap space. For Ubuntu, see [this guide](https://askubuntu.com/questions/178712/how-to-increase-swap-space) if you need to increase swap space.
 
 ## 1. Get The Code
 
