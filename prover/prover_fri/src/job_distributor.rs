@@ -118,6 +118,7 @@ impl Server {
     async fn run(self: Arc<Self>) -> anyhow::Result<()> {
         let server = jsonrpsee::server::Server::builder()
             .max_request_body_size(self.max_size)
+            .max_response_body_size(self.max_size)
             .build(self.server_addr)
             .await?;
 
@@ -144,7 +145,7 @@ impl Server {
 #[tokio::main]
 async fn main() -> Result<()> {
     let server_addr: SocketAddr = "0.0.0.0:3030".parse()?;
-    let max_size = 20 * 1024 * 1024;
+    let max_size = 100 * 1024 * 1024;
     let server = Arc::new(Server::new(server_addr, max_size).await?);
     server.run().await
 }

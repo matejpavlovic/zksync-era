@@ -118,7 +118,7 @@ fn parse_circuit_ids_rounds(s: &str) -> Result<Vec<CircuitIdRoundTuple>, anyhow:
 async fn main() -> anyhow::Result<()> {
     let opt = Cli::parse();
     let server_url = &opt.server_url;
-    let max_size: u32 = 20 * 1024 * 1024;
+    let max_size: u32 = 100 * 1024 * 1024;
     let circuit_ids_rounds = opt.circuit_ids_rounds;
     let client = Client::new(server_url, max_size, circuit_ids_rounds).await?;
     client.poll_for_job().await?;
