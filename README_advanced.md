@@ -31,7 +31,7 @@ To generate keys for all possible circuits and rounds, use the following command
 cd prover
 ./setup.sh
 ```
-> **Note**: Generating all keys will require approximately 400 GB of disk space.
+> **Note**: Generating all keys will require approximately 400 GB of disk space, and approximately an hour to complete.
 
 If you only need to prove specific circuits, you can download the keys for those circuits individually as described below.
 

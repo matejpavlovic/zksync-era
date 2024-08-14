@@ -59,12 +59,28 @@ chmod +x run_prover.sh
 ```
 > **Note**: On Mac, the prover may crash unexpectedly. If it does, the script will automatically relaunch the prover.
 
+***Important***: This guide is designed for users new to community proving with Zksync-Era, and enables users to execute the most common prover job (Circuit ID 1, Round 0) in Zksync-Era.
+If you would like to be able to execute more prover jobs, please refer to the [Advanced README](./README_advanced.md).
+If you would like to be able to execute **all** prover jobs, do the following steps.
+
+First, generate keys for all possible circuits and rounds using the following command:
+
+```bash
+cd prover
+./setup.sh
+```
+> **Note**: Generating all keys will require approximately 400 GB of disk space, and approximately an hour to complete.
+
+Then, run the prover with the following command:
+```bash
+chmod +x run_prover.sh
+./run_prover.sh --server-url http://34.29.79.81:3030 --circuit-ids "all"
+```
+where setting circuit-ids to "all" implies support for all prover jobs (i.e., you are willing to execute any prover job).
+
 ## Additional Resources
 - [Setup Instructions for Mac](./setup_instructions_mac.md)
 - [Setup Instructions for Ubuntu](./setup_instructions_ubuntu.md)
-
-**Important**: This guide is designed for users new to community proving with Zksync-Era, and enables users to execute the most common prover job in Zksync-Era .
-If you are an experienced user looking to prove specific circuits or require more advanced instructions, please refer to the [Advanced README](./README_advanced.md).
 
 ## Contact
 If you have any questions, feel free to reach out via email at [jst@matterlabs.dev](mailto:jst@matterlabs.dev), or open an issue on GitHub.
