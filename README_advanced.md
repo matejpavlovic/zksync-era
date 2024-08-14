@@ -22,8 +22,19 @@ chmod +x install-mac.sh
 ```
 > **Note**: These scripts require some manual interactions. If any issues arise, refer to the step-by-step guides [here](./setup_instructions_mac.md) for Mac and [here](./setup_instructions_ubuntu.md) for Ubuntu.
 
-## 2. Download Proving and Verification Keys
-Before running the prover, download the necessary proving and verification keys.
+## 2. Generate Proving and Verification Keys
+Before running the prover, you need to generate the required proving and verification keys. Each (Circuit ID, Round) pair requires its own corresponding set of keys.
+
+To generate keys for all possible circuits and rounds, use the following command:
+
+```bash
+cd prover
+./setup.sh
+```
+> **Note**: Generating all keys will require approximately 400 GB of disk space.
+
+If you only need to prove specific circuits, you can download the keys for those circuits individually as described below.
+
 Example for Circuit ID 1, Round 0:
 
 ```bash
@@ -35,12 +46,11 @@ Or using curl:
 curl -O http://34.29.79.81:8000/setup_basic_1_data.bin
 curl -O http://34.29.79.81:8000/verification_basic_1_key.json
 ```
-Place these files in the following directory: `zksync-era/prover/vk_setup_data_generator_server_fri/data`.
+Then, place these downloaded files in the following directory: `zksync-era/prover/vk_setup_data_generator_server_fri/data`.
 
 ## 3. Run the Prover
 Once everything is set up, run the prover with the following command:
 ```bash
-cd prover
 chmod +x run_prover.sh
 ./run_prover.sh --server-url http://34.29.79.81:3030 --circuit-ids "(1,0),(2,1)"
 ```

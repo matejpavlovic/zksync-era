@@ -49,7 +49,8 @@ chmod +x run_prover.sh
 - [Setup Instructions for Mac](./setup_instructions_mac.md)
 - [Setup Instructions for Ubuntu](./setup_instructions_ubuntu.md)
 
-**Important**: This guide is designed for users new to community proving with Zksync-Era. If you are an experienced user looking to prove specific circuits or require more advanced instructions, please refer to the [Advanced README](./README_advanced.md).
+**Important**: This guide is designed for users new to community proving with Zksync-Era, and enables users to execute the most common prover job in Zksync-Era .
+If you are an experienced user looking to prove specific circuits or require more advanced instructions, please refer to the [Advanced README](./README_advanced.md).
 
 ## Contact
 If you have any questions, feel free to reach out via email at [jst@matterlabs.dev](mailto:jst@matterlabs.dev), or open an issue on GitHub.
