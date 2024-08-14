@@ -23,7 +23,8 @@ chmod +x install-mac.sh
 > **Note**: These scripts require some manual interactions. If any issues arise, refer to the step-by-step guides [here](./setup_instructions_mac.md) for Mac and [here](./setup_instructions_ubuntu.md) for Ubuntu.
 
 ## 2. Download Proving and Verification Keys
-Before running the prover, download the necessary proving and verification keys:
+Before running the prover, download the necessary proving and verification keys.
+Example for Circuit ID 1, Round 0:
 
 ```bash
 wget http://34.29.79.81:8000/setup_basic_1_data.bin
@@ -41,15 +42,16 @@ Once everything is set up, run the prover with the following command:
 ```bash
 cd prover
 chmod +x run_prover.sh
-./run_prover.sh --server-url http://34.29.79.81:3030
+./run_prover.sh --server-url http://34.29.79.81:3030 --circuit-ids "(1,0),(2,1)"
 ```
+where server-url is the url of the job distributor, and circuit-ids (x,y) correspond to the Circuits IDs (x) and Rounds (y) you are willing to prove.
+For example, (1,0) refers to Circuit ID 1 and Round 0.
+
 > **Note**: On Mac, the prover may crash unexpectedly. If it does, the script will automatically relaunch the prover.
 
 ## Additional Resources
 - [Setup Instructions for Mac](./setup_instructions_mac.md)
 - [Setup Instructions for Ubuntu](./setup_instructions_ubuntu.md)
-
-**Important**: This guide is designed for users new to community proving with Zksync-Era. If you are an experienced user looking to prove specific circuits or require more advanced instructions, please refer to the [Advanced README](./README_advanced.md).
 
 ## Contact
 If you have any questions, feel free to reach out via email at [jst@matterlabs.dev](mailto:jst@matterlabs.dev), or open an issue on GitHub.
