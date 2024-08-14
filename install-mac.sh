@@ -4,7 +4,7 @@
 set -e
 
 # Remember local directory as the root of community proving
-CP_DIR=$(pwd)
+ZKSYNC_HOME=$(pwd)
 
 # Install Homebrew
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -24,25 +24,24 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
 echo "export NVM_DIR=\"$HOME/.nvm\"" >> $HOME/.zprofile
 echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm' >> $HOME/.zprofile
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+
+# Execute the nvm script in the home directory (assuming there is no .nvmrc there).
+# See https://github.com/nvm-sh/nvm/issues/1985
+working_dir=$(pwd)
+cd
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+cd $working_dir
 
 # Install Node and Yarn
 nvm install 18
 npm install -g yarn
 yarn set version 1.22.19
 
-# Clone repository and checkout community proving branch
-git clone https://github.com/johnstephan/zksync-era.git
-cd zksync-era
-git checkout community-proving
-cd ..
-
 # Set the zksync environment variables
-echo "export ZKSYNC_HOME=\"$CP_DIR/zksync-era\"" >> $HOME/.zprofile
+echo "export ZKSYNC_HOME=\"$ZKSYNC_HOME\"" >> $HOME/.zprofile
 echo 'export PATH="$ZKSYNC_HOME/bin:$PATH"' >> $HOME/.zprofile
-export ZKSYNC_HOME="$CP_DIR/zksync-era"
+export ZKSYNC_HOME="$ZKSYNC_HOME"
 export PATH="$ZKSYNC_HOME/bin:$PATH"
 
 # Init ZKsync Era
-cd zksync-era
 zk
