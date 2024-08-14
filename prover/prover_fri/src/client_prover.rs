@@ -3,13 +3,11 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use tokio;
-use zksync_prover_fri::cpu_prover_utils::Prover;
+use zksync_prover_fri::cpu_prover_utils::{Prover, parse_circuit_ids_rounds};
 use zksync_prover_fri_types::ProverJob;
-use zksync_types::basic_fri_types::CircuitIdRoundTuple;
 use zksync_core_leftovers::temp_config_store::load_general_config;
 use anyhow::Context as _;
 use zksync_prover_fri_utils::get_all_circuit_id_round_tuples_for;
-
 
 #[derive(Debug, Parser)]
 #[command(author = "Matter Labs", version)]
@@ -20,7 +18,7 @@ pub(crate) struct Cli {
     pub(crate) secrets_path: Option<std::path::PathBuf>,
     #[arg(long)]
     pub(crate) server_url: String,
-    #[arg(long, default_value = "(1,0)")] // Set default value if not provided
+    #[arg(long, default_value = "(1,0)")]
     pub(crate) circuit_ids_rounds: String,
 }
 
@@ -87,32 +85,6 @@ impl Client {
         Ok(())
     }
 }
-
-fn parse_circuit_ids_rounds(s: &str) -> Result<Vec<CircuitIdRoundTuple>, anyhow::Error> {
-    s.split("),(")
-        .map(|pair| {
-            let cleaned = pair.trim_matches(|c| c == '(' || c == ')');
-            let nums: Vec<&str> = cleaned.split(',').collect();
-            if nums.len() != 2 {
-                return Err(anyhow::anyhow!("Invalid tuple format: {}", pair));
-            }
-            let first: u8 = nums[0]
-                .trim()
-                .parse::<u32>()
-                .context("Failed to parse first element of tuple")?
-                .try_into()
-                .context("Failed to convert first element to u8")?;
-            let second: u8 = nums[1]
-                .trim()
-                .parse::<u32>()
-                .context("Failed to parse second element of tuple")?
-                .try_into()
-                .context("Failed to convert second element to u8")?;
-            Ok(CircuitIdRoundTuple::new(first, second))
-        })
-        .collect()
-}
-
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

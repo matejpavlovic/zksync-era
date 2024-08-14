@@ -15,17 +15,14 @@ use zksync_vk_setup_data_server_fri::{keystore::Keystore, GoldilocksProverSetupD
 use crate::utils::{get_setup_data_key, verify_proof, ProverArtifacts, save_proof, load_setup_data_cache, SetupLoadMode};
 use zksync_types::basic_fri_types::CircuitIdRoundTuple;
 use zksync_prover_fri_utils::fetch_next_circuit;
-use zksync_prover_fri_types::{PROVER_PROTOCOL_SEMANTIC_VERSION};
+use zksync_prover_fri_types::PROVER_PROTOCOL_SEMANTIC_VERSION;
 use zksync_object_store::ObjectStoreFactory;
 use zksync_object_store::ObjectStore;
-use zksync_prover_dal::{ConnectionPool};
-use zksync_types::{
-    protocol_version::ProtocolSemanticVersion,
-};
+use zksync_prover_dal::ConnectionPool;
+use zksync_types::protocol_version::ProtocolSemanticVersion;
 use zksync_core_leftovers::temp_config_store::{load_database_secrets, load_general_config};
 use zksync_env_config::object_store::ProverObjectStoreConfig;
 use zksync_prover_dal::Prover as ProverDal;
-
 
 pub struct Prover {
     pub config: Arc<FriProverConfig>,
@@ -268,4 +265,29 @@ pub fn get_setup_data(
             Arc::new(artifact)
         }
     })
+}
+
+pub fn parse_circuit_ids_rounds(s: &str) -> Result<Vec<CircuitIdRoundTuple>, anyhow::Error> {
+    s.split("),(")
+        .map(|pair| {
+            let cleaned = pair.trim_matches(|c| c == '(' || c == ')');
+            let nums: Vec<&str> = cleaned.split(',').collect();
+            if nums.len() != 2 {
+                return Err(anyhow::anyhow!("Invalid tuple format: {}", pair));
+            }
+            let first: u8 = nums[0]
+                .trim()
+                .parse::<u32>()
+                .context("Failed to parse first element of tuple")?
+                .try_into()
+                .context("Failed to convert first element to u8")?;
+            let second: u8 = nums[1]
+                .trim()
+                .parse::<u32>()
+                .context("Failed to parse second element of tuple")?
+                .try_into()
+                .context("Failed to convert second element to u8")?;
+            Ok(CircuitIdRoundTuple::new(first, second))
+        })
+        .collect()
 }
