@@ -24,7 +24,13 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
 echo "export NVM_DIR=\"$HOME/.nvm\"" >> $HOME/.zprofile
 echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm' >> $HOME/.zprofile
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --install # see https://github.com/nvm-sh/nvm/issues/1985
+
+# Execute the nvm script in the home directory (assuming there is no .nvmrc there).
+# See https://github.com/nvm-sh/nvm/issues/1985
+working_dir=$(pwd)
+cd
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+cd $working_dir
 
 # Install Node and Yarn
 nvm install 18

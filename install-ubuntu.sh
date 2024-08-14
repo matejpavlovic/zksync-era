@@ -17,10 +17,16 @@ source "$HOME/.cargo/env"
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
 
 # Load NVM-related environment variables
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --install # see https://github.com/nvm-sh/nvm/issues/1985
 echo 'export PATH="/usr/local/bin:$PATH"' >> "$HOME/.bashrc"
+export NVM_DIR="$HOME/.nvm"
 export PATH="/usr/local/bin:$PATH"
+
+# Execute the nvm script in the home directory (assuming there is no .nvmrc there).
+# See https://github.com/nvm-sh/nvm/issues/1985
+working_dir=$(pwd)
+cd
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+cd $working_dir
 
 # Install cmake 3.24.2
 wget https://github.com/Kitware/CMake/releases/download/v3.24.2/cmake-3.24.2.tar.gz
