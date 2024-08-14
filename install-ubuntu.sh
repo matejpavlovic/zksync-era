@@ -18,7 +18,7 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
 
 # Load NVM-related environment variables
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --install # see https://github.com/nvm-sh/nvm/issues/1985
 echo 'export PATH="/usr/local/bin:$PATH"' >> "$HOME/.bashrc"
 export PATH="/usr/local/bin:$PATH"
 
