@@ -103,6 +103,7 @@ impl JobProcessor for WitnessVectorGenerator {
             &*self.object_store,
             &self.circuit_ids_for_round_to_be_proven,
             &self.protocol_version,
+            0,
         )
         .await
         else {

@@ -1,53 +1,114 @@
-# ZKsync Era: A ZK Rollup For Scaling Ethereum
+# Community Proving with Zksync-Era
 
-[![Logo](eraLogo.png)](https://zksync.io/)
+## Introduction
 
-ZKsync Era is a layer 2 rollup that uses zero-knowledge proofs to scale Ethereum without compromising on security or
-decentralization. Since it's EVM compatible (Solidity/Vyper), 99% of Ethereum projects can redeploy without refactoring
-or re-auditing a single line of code. ZKsync Era also uses an LLVM-based compiler that will eventually let developers
-write smart contracts in C++, Rust and other popular languages.
+This project allows users to perform community proving using Zksync-Era. Follow the steps below to set up the necessary
+environment and run the prover.
 
-## Knowledge Index
+## Prerequisites
 
-The following questions will be answered by the following resources:
+- Ubuntu 20.04+ or MacOS
+- 32 GB RAM (or at least 16 GB with a lot of swap space).
+- Bash shell
+- wget or curl
 
-| Question                                                | Resource                                       |
-| ------------------------------------------------------- | ---------------------------------------------- |
-| What do I need to develop the project locally?          | [development.md](docs/guides/development.md)   |
-| How can I set up my dev environment?                    | [setup-dev.md](docs/guides/setup-dev.md)       |
-| How can I run the project?                              | [launch.md](docs/guides/launch.md)             |
-| What is the logical project structure and architecture? | [architecture.md](docs/guides/architecture.md) |
-| Where can I find protocol specs?                        | [specs.md](docs/specs/README.md)               |
-| Where can I find developer docs?                        | [docs](https://docs.zksync.io)                 |
+> **Note**: MacOS usually provides sufficient swap space. For Ubuntu, see
+> [this guide](https://askubuntu.com/questions/178712/how-to-increase-swap-space) if you need to increase swap space.
 
-## Policies
+## 1. Get The Code
 
-- [Security policy](SECURITY.md)
-- [Contribution policy](CONTRIBUTING.md)
+Clone this repository, checking out the `community-proving` branch.
 
-## License
+```bash
+git clone -b community-proving https://github.com/johnstephan/zksync-era.git
+```
 
-ZKsync Era is distributed under the terms of either
+## 2. Install Required Components
 
-- Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or <https://opensource.org/blog/license/mit/>)
+For Ubuntu users:
 
-at your option.
+```bash
+chmod +x install-ubuntu.sh
+./install-ubuntu.sh
+```
 
-## Official Links
+For Mac users:
 
-- [Website](https://zksync.io/)
-- [GitHub](https://github.com/matter-labs)
-- [ZK Credo](https://github.com/zksync/credo)
-- [Twitter](https://twitter.com/zksync)
-- [Twitter for Developers](https://twitter.com/zkSyncDevs)
-- [Discord](https://join.zksync.dev/)
-- [Mirror](https://zksync.mirror.xyz/)
-- [Youtube](https://www.youtube.com/@zkSync-era)
+```bash
+chmod +x install-mac.sh
+./install-mac.sh
+```
 
-## Disclaimer
+When the script is done, restart the terminal to reload the zsh configuration.
 
-ZKsync Era has been through lots of testing and audits. Although it is live, it is still in alpha state and will go
-through more audits and bug bounty programs. We would love to hear our community's thoughts and suggestions about it! It
-is important to state that forking it now can potentially lead to missing important security updates, critical features,
-and performance improvements.
+> **Note**: These scripts require some manual interactions. If any issues arise, refer to the step-by-step guides
+> [for Mac](./setup_instructions_mac.md) and [for Ubuntu](./setup_instructions_ubuntu.md).
+
+## 3. Download Proving and Verification Keys
+
+Before running the prover, download the necessary proving and verification keys:
+
+```bash
+wget http://34.29.79.81:8000/setup_basic_1_data.bin
+wget http://34.29.79.81:8000/verification_basic_1_key.json
+```
+
+Or using curl:
+
+```bash
+curl -O http://34.29.79.81:8000/setup_basic_1_data.bin
+curl -O http://34.29.79.81:8000/verification_basic_1_key.json
+```
+
+Place these files in the following directory: `zksync-era/prover/vk_setup_data_generator_server_fri/data`.
+
+> **Note**: The file `setup_basic_1_data.bin` is over 13GB in size and will take long to download, but this only needs
+> to happen once. Performing proving jobs later only requires little network bandwidth. If you have constraints on
+> network bandwidth or the amount of downloaded data, see the [advanced instructions](./README_advanced.md) for
+> generating the keys locally.
+
+## 4. Run the Prover
+
+Once everything is set up, run the prover with the following command:
+
+```bash
+cd prover
+chmod +x run_prover.sh
+./run_prover.sh --server-url http://34.29.79.81:3030
+```
+
+> **Note**: On Mac, the prover may crash unexpectedly. If it does, the script will automatically relaunch the prover.
+
+**_Important_**: This guide is designed for users new to community proving with Zksync-Era, and enables users to execute
+the most common prover job (Circuit ID 1, Round 0) in Zksync-Era. If you would like to be able to execute more prover
+jobs, please refer to the [Advanced README](./README_advanced.md). If you would like to be able to execute **all**
+prover jobs, do the following steps.
+
+First, generate keys for all possible circuits and rounds using the following command:
+
+```bash
+cd prover
+./setup.sh
+```
+
+> **Note**: Generating all keys will require approximately 400 GB of disk space, and approximately an hour to complete.
+
+Then, run the prover with the following command:
+
+```bash
+chmod +x run_prover.sh
+./run_prover.sh --server-url http://34.29.79.81:3030 --circuit-ids "all"
+```
+
+where setting circuit-ids to "all" implies support for all prover jobs (i.e., you are willing to execute any prover
+job).
+
+## Additional Resources
+
+- [Setup Instructions for Mac](./setup_instructions_mac.md)
+- [Setup Instructions for Ubuntu](./setup_instructions_ubuntu.md)
+
+## Contact
+
+If you have any questions, feel free to reach out via email at [jst@matterlabs.dev](mailto:jst@matterlabs.dev), or open
+an issue on GitHub.

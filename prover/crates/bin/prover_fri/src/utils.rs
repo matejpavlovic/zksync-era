@@ -1,9 +1,11 @@
 #![cfg_attr(not(feature = "gpu"), allow(unused_imports))]
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
-use std::{sync::Arc, time::Instant};
-
+use anyhow::Context;
 use tokio::sync::Mutex;
 use zkevm_test_harness::prover_utils::{verify_base_layer_proof, verify_recursion_layer_proof};
+use zksync_config::configs::{fri_prover_group::FriProverGroupConfig, FriProverConfig};
+use zksync_env_config::FromEnv;
 use zksync_object_store::ObjectStore;
 use zksync_prover_dal::{Connection, Prover, ProverDal};
 use zksync_prover_fri_types::{
@@ -27,8 +29,13 @@ use zksync_types::{
     protocol_version::ProtocolSemanticVersion,
     L1BatchNumber,
 };
+use zksync_vk_setup_data_server_fri::{keystore::Keystore, GoldilocksProverSetupData};
 
-use crate::metrics::METRICS;
+#[derive(Clone)]
+pub enum SetupLoadMode {
+    FromMemory(HashMap<ProverServiceDataKey, Arc<GoldilocksProverSetupData>>),
+    FromDisk,
+}
 
 pub type F = GoldilocksField;
 pub type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
@@ -37,16 +44,26 @@ pub type Ext = GoldilocksExt2;
 #[cfg(feature = "gpu")]
 pub type SharedWitnessVectorQueue = Arc<Mutex<FixedSizeQueue<GpuProverJob>>>;
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProverArtifacts {
     block_number: L1BatchNumber,
     pub proof_wrapper: FriProofWrapper,
+    pub job_id: u32,
+    pub request_id: u32,
 }
 
 impl ProverArtifacts {
-    pub fn new(block_number: L1BatchNumber, proof_wrapper: FriProofWrapper) -> Self {
+    pub fn new(
+        block_number: L1BatchNumber,
+        proof_wrapper: FriProofWrapper,
+        job_id: u32,
+        request_id: u32,
+    ) -> Self {
         Self {
             block_number,
             proof_wrapper,
+            job_id,
+            request_id,
         }
     }
 }
@@ -67,16 +84,10 @@ pub async fn save_proof(
     connection: &mut Connection<'_, Prover>,
     protocol_version: ProtocolSemanticVersion,
 ) {
-    tracing::info!(
-        "Successfully proven job: {}, total time taken: {:?}",
-        job_id,
-        started_at.elapsed()
-    );
     let proof = artifacts.proof_wrapper;
-
     // We save the scheduler proofs in public bucket,
     // so that it can be verified independently while we're doing shadow proving
-    let (circuit_type, is_scheduler_proof) = match &proof {
+    let (_circuit_type, is_scheduler_proof) = match &proof {
         FriProofWrapper::Base(base) => (base.numeric_circuit_type(), false),
         FriProofWrapper::Recursive(recursive_circuit) => match recursive_circuit {
             ZkSyncRecursionLayerProof::SchedulerCircuit(_) => {
@@ -93,10 +104,7 @@ pub async fn save_proof(
         },
     };
 
-    let blob_save_started_at = Instant::now();
     let blob_url = blob_store.put(job_id, &proof).await.unwrap();
-
-    METRICS.blob_save_time[&circuit_type.to_string()].observe(blob_save_started_at.elapsed());
 
     let mut transaction = connection.start_transaction().await.unwrap();
     transaction
@@ -117,7 +125,9 @@ pub fn verify_proof(
     proof: &Proof<F, H, Ext>,
     vk: &VerificationKey<F, H>,
     job_id: u32,
-) {
+    request_id: u32,
+) -> bool {
+    println!("Verifying proof");
     let started_at = Instant::now();
     let (is_valid, circuit_id) = match circuit_wrapper {
         CircuitWrapper::Base(base_circuit) => (
@@ -131,13 +141,18 @@ pub fn verify_proof(
         CircuitWrapper::BasePartial(_) => panic!("Invalid CircuitWrapper received"),
     };
 
-    METRICS.proof_verification_time[&circuit_id.to_string()].observe(started_at.elapsed());
-
     if !is_valid {
-        let msg = format!("Failed to verify proof for job-id: {job_id} circuit_type {circuit_id}");
-        tracing::error!("{}", msg);
-        panic!("{}", msg);
+        println!("Failed to verify proof for job: {job_id} circuit_type {circuit_id}");
+    } else {
+        println!(
+            "Proof verification for job {} with request id {} succeeded, it took {:?}.",
+            job_id,
+            request_id,
+            started_at.elapsed()
+        );
     }
+
+    is_valid
 }
 
 pub fn setup_metadata_to_setup_data_key(
@@ -160,6 +175,40 @@ pub fn get_setup_data_key(key: ProverServiceDataKey) -> ProverServiceDataKey {
         }
         _ => key,
     }
+}
+
+#[allow(dead_code)]
+pub fn load_setup_data_cache(config: &FriProverConfig) -> anyhow::Result<SetupLoadMode> {
+    Ok(match config.setup_load_mode {
+        zksync_config::configs::fri_prover::SetupLoadMode::FromDisk => SetupLoadMode::FromDisk,
+        zksync_config::configs::fri_prover::SetupLoadMode::FromMemory => {
+            let mut cache = HashMap::new();
+            tracing::info!(
+                "Loading setup data cache for group {}",
+                &config.specialized_group_id
+            );
+            let prover_setup_metadata_list = FriProverGroupConfig::from_env()
+                .context("FriProverGroupConfig::from_env()")?
+                .get_circuit_ids_for_group_id(config.specialized_group_id)
+                .expect(
+                    "At least one circuit should be configured for group when running in FromMemory mode",
+                );
+            tracing::info!(
+                "for group {} configured setup metadata are {:?}",
+                &config.specialized_group_id,
+                prover_setup_metadata_list
+            );
+            let keystore = Keystore::default();
+            for prover_setup_metadata in prover_setup_metadata_list {
+                let key = setup_metadata_to_setup_data_key(&prover_setup_metadata);
+                let setup_data = keystore
+                    .load_cpu_setup_data_for_circuit_type(key.clone())
+                    .context("get_cpu_setup_data_for_circuit_type()")?;
+                cache.insert(key, Arc::new(setup_data));
+            }
+            SetupLoadMode::FromMemory(cache)
+        }
+    })
 }
 
 #[cfg(test)]

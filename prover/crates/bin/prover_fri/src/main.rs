@@ -32,7 +32,6 @@ mod gpu_prover_availability_checker;
 mod gpu_prover_job_processor;
 mod metrics;
 mod prover_job_processor;
-mod socket_listener;
 mod utils;
 
 async fn graceful_shutdown(zone: Zone, port: u16) -> anyhow::Result<impl Future<Output = ()>> {
@@ -180,7 +179,7 @@ async fn get_prover_tasks(
     circuit_ids_for_round_to_be_proven: Vec<CircuitIdRoundTuple>,
     _init_notifier: Arc<Notify>,
 ) -> anyhow::Result<Vec<JoinHandle<anyhow::Result<()>>>> {
-    use crate::prover_job_processor::{load_setup_data_cache, Prover};
+    use crate::{prover_job_processor::Prover, utils::load_setup_data_cache};
 
     let protocol_version = PROVER_PROTOCOL_SEMANTIC_VERSION;
 

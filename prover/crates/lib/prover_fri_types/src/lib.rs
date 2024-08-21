@@ -104,6 +104,7 @@ pub struct ProverJob {
     pub job_id: u32,
     pub circuit_wrapper: CircuitWrapper,
     pub setup_data_key: ProverServiceDataKey,
+    pub request_id: u32,
 }
 
 impl ProverJob {
@@ -112,12 +113,14 @@ impl ProverJob {
         job_id: u32,
         circuit_wrapper: CircuitWrapper,
         setup_data_key: ProverServiceDataKey,
+        request_id: u32,
     ) -> Self {
         Self {
             block_number,
             job_id,
             circuit_wrapper,
             setup_data_key,
+            request_id,
         }
     }
 }

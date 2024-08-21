@@ -33,6 +33,7 @@ pub async fn fetch_next_circuit(
     blob_store: &dyn ObjectStore,
     circuit_ids_for_round_to_be_proven: &[CircuitIdRoundTuple],
     protocol_version: &ProtocolSemanticVersion,
+    req_id: u32,
 ) -> Option<ProverJob> {
     let pod_name = get_current_pod_name();
     let prover_job = match &circuit_ids_for_round_to_be_proven.is_empty() {
@@ -127,6 +128,7 @@ pub async fn fetch_next_circuit(
         prover_job.id,
         input,
         setup_data_key,
+        req_id,
     ))
 }
 
