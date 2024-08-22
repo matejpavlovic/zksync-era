@@ -2,12 +2,13 @@
 
 # Check if server-url is provided
 if [ -z "$1" ]; then
-  echo "Usage: $0 --server-url <server-url> [--circuit-ids <circuit-ids>]"
+  echo "Usage: $0 --server-url <server-url> [--username <username>] [--circuit-ids <circuit-ids>]"
   exit 1
 fi
 
 # Parse arguments
 SERVER_URL=""
+USERNAME=""
 CIRCUIT_IDS=""
 
 while [[ $# -gt 0 ]]; do
@@ -16,6 +17,11 @@ while [[ $# -gt 0 ]]; do
   case $key in
     --server-url)
       SERVER_URL="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    --username)
+      USERNAME="$2"
       shift # past argument
       shift # past value
       ;;
@@ -40,11 +46,21 @@ fi
 # Loop to run the prover
 while true; do
   if [ -z "$CIRCUIT_IDS" ]; then
-    echo "Running prover with server-url: $SERVER_URL"
-    zk f cargo run --release --bin client -- --server-url "$SERVER_URL"
+    if [ -z "$USERNAME" ]; then
+      echo "Running prover with server-url: $SERVER_URL"
+      zk f cargo run --release --bin client -- --server-url "$SERVER_URL"
+    else
+      echo "Running prover with server-url: $SERVER_URL and username: $USERNAME"
+      zk f cargo run --release --bin client -- --server-url "$SERVER_URL" --username "$USERNAME"
+    fi
   else
-    echo "Running prover with server-url: $SERVER_URL and circuit-ids: $CIRCUIT_IDS"
-    zk f cargo run --release --bin client -- --server-url "$SERVER_URL" --circuit-ids-rounds "$CIRCUIT_IDS"
+    if [ -z "$USERNAME" ]; then
+      echo "Running prover with server-url: $SERVER_URL and circuit-ids: $CIRCUIT_IDS"
+      zk f cargo run --release --bin client -- --server-url "$SERVER_URL" --circuit-ids-rounds "$CIRCUIT_IDS"
+    else
+      echo "Running prover with server-url: $SERVER_URL, username: $USERNAME, and circuit-ids: $CIRCUIT_IDS"
+      zk f cargo run --release --bin client -- --server-url "$SERVER_URL" --username "$USERNAME" --circuit-ids-rounds "$CIRCUIT_IDS"
+    fi
   fi
 
   # Check if the command succeeded

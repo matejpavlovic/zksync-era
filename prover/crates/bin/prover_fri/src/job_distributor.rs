@@ -7,7 +7,6 @@ use std::{
     },
     time::Instant,
 };
-
 use anyhow::Result;
 use clap::Parser;
 use jsonrpsee::{
@@ -21,6 +20,9 @@ use tokio::{
 use zksync_prover_fri::{cpu_prover_utils::JobDistributor, utils::ProverArtifacts};
 use zksync_prover_fri_types::ProverJob;
 use zksync_types::basic_fri_types::CircuitIdRoundTuple;
+
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncWriteExt;
 
 const NO_JOB_AVAILABLE_ERROR_CODE: i32 = 1001;
 const NO_JOB_AVAILABLE_ERROR_MESSAGE: &str = "No job is currently available.";
@@ -83,7 +85,7 @@ impl Server {
                     );
                     Ok(proof_job)
                 } else {
-                    println!("No job is available.");
+                    println!("No job with the provided (circuit_id, aggregation_round) is currently available. Please try again later.");
                     let error = ErrorObject::owned(
                         NO_JOB_AVAILABLE_ERROR_CODE,
                         NO_JOB_AVAILABLE_ERROR_MESSAGE,
@@ -97,12 +99,13 @@ impl Server {
         module.register_async_method("submit_result", move |_params, _, _| {
             let server = self.clone();
             async move {
-                let proof_artifact: ProverArtifacts = _params.one()?;
+                // Decode the client's response to get the username and proof_artifact
+                let (username, proof_artifact): (String, ProverArtifacts) = _params.parse()?;
                 let mut jobs = server.jobs.write().await;
                 if let Some((job, started_job_at)) = jobs.remove(&proof_artifact.job_id) {
                     println!(
-                        "Received proof artifact for job {} with request id {}.",
-                        job.job_id, proof_artifact.request_id
+                        "Received from {} the proof artifact for job {} with request id {}.",
+                        username, job.job_id, proof_artifact.request_id
                     );
                     let server_clone = server.clone();
 
@@ -114,13 +117,18 @@ impl Server {
                                 .job_distributor
                                 .save_proof_to_db(job_id, proof_artifact, started_job_at)
                                 .await;
+
+                            // Write the username to a local file upon successful verification
+                            if let Err(e) = write_username_to_file(&username).await {
+                                eprintln!("Failed to write username to file: {}", e);
+                            }
                         }
                     });
                     // Respond with success
                     Ok(())
                 } else {
                     println!(
-                        "There is no current job with job id {}.",
+                        "There is currently no job with job id {}.",
                         proof_artifact.job_id
                     );
                     let error = ErrorObject::owned(
@@ -161,6 +169,17 @@ impl Server {
 
         Ok(())
     }
+}
+
+async fn write_username_to_file(username: &str) -> Result<()> {
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("verified_provers.txt")
+        .await?;
+
+    file.write_all(format!("{}\n", username).as_bytes()).await?;
+    Ok(())
 }
 
 #[tokio::main]

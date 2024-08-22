@@ -16,6 +16,8 @@ pub(crate) struct Cli {
     pub(crate) secrets_path: Option<std::path::PathBuf>,
     #[arg(long)]
     pub(crate) server_url: String,
+    #[arg(long, default_value = "anonymous")]
+    pub(crate) username: String,
     #[arg(long, default_value = "(1,0)")]
     pub(crate) circuit_ids_rounds: String,
 }
@@ -23,6 +25,7 @@ pub(crate) struct Cli {
 struct Client {
     client: jsonrpsee::http_client::HttpClient,
     client_prover: Prover,
+    username: String,
 }
 
 impl Client {
@@ -30,6 +33,7 @@ impl Client {
         server_url: &str,
         max_size: u32,
         circuit_ids_rounds: String,
+        username: String,
     ) -> anyhow::Result<Self> {
         let client = HttpClientBuilder::default()
             .max_request_size(max_size)
@@ -56,6 +60,7 @@ impl Client {
         Ok(Self {
             client,
             client_prover,
+            username,
         })
     }
 
@@ -78,7 +83,11 @@ impl Client {
                     job.job_id, job.request_id
                 );
                 let proof_artifact = self.client_prover.prove(job);
-                let result_json = serde_json::to_value(proof_artifact)?;
+                // Include the username with the proof artifact in the JSON object
+                let result_json = serde_json::json!({
+                    "username": self.username,
+                    "proof_artifact": proof_artifact
+                });
 
                 let submit_response: Result<(), _> = self
                     .client
@@ -102,7 +111,8 @@ async fn main() -> anyhow::Result<()> {
     let server_url = &opt.server_url;
     let max_size: u32 = 100 * 1024 * 1024;
     let circuit_ids_rounds = opt.circuit_ids_rounds;
-    let client = Client::new(server_url, max_size, circuit_ids_rounds).await?;
+    let username = opt.username;
+    let client = Client::new(server_url, max_size, circuit_ids_rounds, username).await?;
     client.poll_for_job().await?;
     Ok(())
 }
